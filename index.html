@@ -634,7 +634,7 @@ header#appHeader {
   margin-bottom: 6px;
 }
 
-.form-input, .form-select, .form-textarea {
+.form-input, .form-textarea {
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--surface-border);
@@ -647,7 +647,17 @@ header#appHeader {
   transition: all 0.2s;
 }
 
-.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent-gold); }
+/* Estilo ajustado para os seletores de horário digitáveis */
+input[type="time"].form-input {
+  color-scheme: dark;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.light-theme input[type="time"].form-input {
+  color-scheme: light;
+}
+
+.form-input:focus, .form-textarea:focus { border-color: var(--accent-gold); }
 
 .form-row {
   display: grid;
@@ -888,6 +898,9 @@ header#appHeader {
   </div>
 </div>
 
+<!-- Lista de Sugestões de Horários (Datalist) -->
+<datalist id="hoursList"></datalist>
+
 <!-- Modal Edição / Criar -->
 <div class="modal-overlay" id="taskModal">
   <div class="modal">
@@ -901,11 +914,11 @@ header#appHeader {
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">INÍCIO</label>
-          <select id="taskStartInput" class="form-select"></select>
+          <input type="time" id="taskStartInput" class="form-input" list="hoursList" step="900">
         </div>
         <div class="form-group">
           <label class="form-label">FIM</label>
-          <select id="taskEndInput" class="form-select"></select>
+          <input type="time" id="taskEndInput" class="form-input" list="hoursList" step="900">
         </div>
       </div>
 
@@ -1069,32 +1082,21 @@ function changeDate() {
   loadState();
 }
 
-function populateTimeSelects() {
-  const times = [''];
+/* Preenche as sugestões no datalist (de 15 em 15 minutos) */
+function populateTimeSuggestions() {
+  const hoursList = document.getElementById('hoursList');
+  hoursList.innerHTML = '';
   for (let h = 0; h < 24; h++) {
     for (let m = 0; m < 60; m += 15) {
       const hh = String(h).padStart(2, '0');
       const mm = String(m).padStart(2, '0');
-      times.push(`${hh}:${mm}`);
+      const opt = document.createElement('option');
+      opt.value = `${hh}:${mm}`;
+      hoursList.appendChild(opt);
     }
   }
-
-  taskStartInput.innerHTML = '<option value="">Sem horário</option>';
-  taskEndInput.innerHTML = '<option value="">Sem horário</option>';
-
-  times.slice(1).forEach(t => {
-    const optStart = document.createElement('option');
-    optStart.value = t;
-    optStart.textContent = t;
-    taskStartInput.appendChild(optStart);
-
-    const optEnd = document.createElement('option');
-    optEnd.value = t;
-    optEnd.textContent = t;
-    taskEndInput.appendChild(optEnd);
-  });
 }
-populateTimeSelects();
+populateTimeSuggestions();
 
 taskStartInput.onchange = () => {
   const startVal = taskStartInput.value;
@@ -1166,7 +1168,7 @@ function renderLayout() {
   });
 }
 
-/* SISTEMA DE NOTIFICAÇÕES (ROBUSTO E REATIVO) */
+/* SISTEMA DE NOTIFICAÇÕES */
 function updateNotifyButton() {
   const notifyBtn = document.getElementById('notifyToggle');
   if (!notifyBtn) return;
@@ -1686,7 +1688,6 @@ themeToggle.onclick = () => {
   localStorage.setItem('aura_theme_light', isLight);
 };
 
-// Eventos globais adicionais para verificação contínua das permissões de notificação
 document.addEventListener('DOMContentLoaded', updateNotifyButton);
 window.addEventListener('focus', updateNotifyButton);
 
