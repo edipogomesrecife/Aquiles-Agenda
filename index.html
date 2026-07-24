@@ -387,7 +387,6 @@ header#appHeader {
   color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   padding-top: 2px;
-  transition: height 0.2s ease;
   display: flex;
   align-items: flex-start;
 }
@@ -396,6 +395,7 @@ header#appHeader {
   flex: 1;
   position: relative;
   border-left: 1px solid var(--surface-border);
+  min-height: calc(24 * var(--hour-height));
 }
 
 .grid-line {
@@ -405,7 +405,6 @@ header#appHeader {
   position: relative;
   cursor: pointer;
   padding: 8px;
-  transition: height 0.2s ease;
 }
 
 .grid-line::before {
@@ -448,13 +447,13 @@ header#appHeader {
   border-radius: 8px;
   cursor: pointer;
   box-shadow: var(--shadow-md);
-  transition: border-color 0.2s, background 0.2s, top 0.2s, height 0.2s;
+  transition: border-color 0.2s, background 0.2s;
   z-index: 10;
   display: flex;
   align-items: center;
   gap: 8px;
   overflow: hidden;
-  min-height: 52px; 
+  box-sizing: border-box;
 }
 
 @media (min-width: 768px) {
@@ -968,8 +967,6 @@ header#appHeader {
 
 <script>
 const HOUR_HEIGHT = 80;
-const MIN_CARD_HEIGHT = 52;
-const CARD_GAP = 6;
 
 const timelineLabels = document.getElementById('timelineLabels');
 const timelineGrid = document.getElementById('timelineGrid');
@@ -1006,7 +1003,7 @@ let editingTask = null;
 let activeViewTask = null;
 let notifiedTasks = new Set(); 
 
-/* Função para sanitizar e normalizar string de hora (ex: "15" -> "15:00", "8:3" -> "08:30") */
+/* Normalização de horários (Ex: "15" -> "15:00") */
 function normalizeTimeString(timeStr) {
   if (!timeStr) return '';
   let str = timeStr.trim();
@@ -1023,7 +1020,7 @@ function normalizeTimeString(timeStr) {
   return str;
 }
 
-/* Auto-Mascara para digitar horario no Celular (ex: 0800 vira 08:00) */
+/* Auto-Mascara para digitar horario */
 function formatTimeInput(input) {
   input.addEventListener('input', (e) => {
     let value = e.target.value.replace(/\D/g, '');
@@ -1164,17 +1161,14 @@ for (let i = 0; i < 24; i++) {
   timelineGrid.appendChild(gridLine);
 }
 
-/* RENDERIZADOR DINÂMICO DE LAYOUT */
+/* RENDERIZADOR BASEADO EM TEMPO REAL */
 function renderLayout() {
-  const hourHeights = new Array(24).fill(HOUR_HEIGHT);
   const tasks = Array.from(timelineGrid.querySelectorAll('.task'));
-  
-  tasks.sort((a, b) => timeToMinutes(a.dataset.start) - timeToMinutes(b.dataset.start));
-
-  const tasksByHour = Array.from({ length: 24 }, () => []);
 
   tasks.forEach(taskElement => {
     const start = normalizeTimeString(taskElement.dataset.start);
+    const end = normalizeTimeString(taskElement.dataset.end);
+
     if (!start) {
       backlog.appendChild(taskElement);
       taskElement.style.position = 'relative';
@@ -1183,71 +1177,25 @@ function renderLayout() {
       return;
     }
 
-    const hour = Math.floor(timeToMinutes(start) / 60);
-    if (hour >= 0 && hour < 24) {
-      tasksByHour[hour].push(taskElement);
-    }
+    const startMinutes = timeToMinutes(start);
+    let endMinutes = end ? timeToMinutes(end) : startMinutes + 15;
+    
+    // Garante que o horário de término nunca seja menor que o de início
+    if (endMinutes <= startMinutes) endMinutes = startMinutes + 15;
+
+    const durationMinutes = endMinutes - startMinutes;
+
+    // Converte minutos diretamente para pixels no grid
+    const topPx = (startMinutes / 60) * HOUR_HEIGHT;
+    const heightPx = Math.max(38, (durationMinutes / 60) * HOUR_HEIGHT);
+
+    taskElement.style.position = 'absolute';
+    taskElement.style.top = `${topPx}px`;
+    taskElement.style.height = `${heightPx}px`;
   });
-
-  // Calcula expansão da altura necessária em cada hora
-  for (let h = 0; h < 24; h++) {
-    const hourTasks = tasksByHour[h];
-    if (hourTasks.length > 0) {
-      let requiredHeight = 0;
-      hourTasks.forEach(taskElement => {
-        const start = normalizeTimeString(taskElement.dataset.start);
-        const end = normalizeTimeString(taskElement.dataset.end);
-        const startMin = timeToMinutes(start);
-        const endMin = end ? timeToMinutes(end) : startMin + 15;
-        const durationMin = Math.max(15, endMin - startMin);
-        const taskHeight = Math.max(MIN_CARD_HEIGHT, (durationMin / 60) * HOUR_HEIGHT);
-        
-        requiredHeight += taskHeight + CARD_GAP;
-      });
-      hourHeights[h] = Math.max(HOUR_HEIGHT, requiredHeight + 4);
-    }
-  }
-
-  // Atualiza a altura das linhas no grid e no painel de horas
-  const gridLines = timelineGrid.querySelectorAll('.grid-line');
-  const labelRows = timelineLabels.querySelectorAll('.label-row');
-  
-  const hourOffsets = new Array(24).fill(0);
-  let currentOffset = 0;
-
-  for (let h = 0; h < 24; h++) {
-    hourOffsets[h] = currentOffset;
-    const hHeight = hourHeights[h];
-    gridLines[h].style.height = `${hHeight}px`;
-    labelRows[h].style.height = `${hHeight}px`;
-    currentOffset += hHeight;
-  }
-
-  // Posiciona perfeitamente cada card dentro do grid
-  for (let h = 0; h < 24; h++) {
-    const hourTasks = tasksByHour[h];
-    let topInHour = hourOffsets[h] + 4;
-
-    hourTasks.forEach(taskElement => {
-      const start = normalizeTimeString(taskElement.dataset.start);
-      const end = normalizeTimeString(taskElement.dataset.end);
-
-      const startMin = timeToMinutes(start);
-      const endMin = end ? timeToMinutes(end) : startMin + 15;
-      const durationMin = Math.max(15, endMin - startMin);
-
-      const baseHeight = Math.max(MIN_CARD_HEIGHT, (durationMin / 60) * HOUR_HEIGHT);
-
-      taskElement.style.position = 'absolute';
-      taskElement.style.top = `${topInHour}px`;
-      taskElement.style.height = `${baseHeight}px`;
-
-      topInHour += baseHeight + CARD_GAP;
-    });
-  }
 }
 
-/* SISTEMA DE NOTIFICAÇÕES (MÓVEL & DESKTOP) */
+/* SISTEMA DE NOTIFICAÇÕES */
 function updateNotifyButton() {
   const notifyBtn = document.getElementById('notifyToggle');
   if (!notifyBtn) return;
@@ -1268,18 +1216,18 @@ function updateNotifyButton() {
 
 notifyToggle.onclick = () => {
   if (!("Notification" in window)) {
-    alert("Seu celular/navegador não suporta notificações em segundo plano diretamente nesta aba. Caso use iPhone, adicione este site à Tela de Início (Safari) para liberar as notificações!");
+    alert("Seu navegador não suporta notificações.");
     return;
   }
 
   if (Notification.permission === "granted") {
     updateNotifyButton();
-    new Notification("AURA OS | Agenda", { body: "Notificações ativas no celular!" });
+    new Notification("AURA OS | Agenda", { body: "Notificações ativas!" });
     return;
   }
 
   if (Notification.permission === "denied") {
-    alert("As notificações foram bloqueadas nas configurações do celular. Toque no ícone de 'Cadeado' ou 'Ajustes' ao lado do endereço do site para liberar!");
+    alert("Liberar notificações nas configurações do seu navegador.");
     return;
   }
 
@@ -1502,7 +1450,6 @@ function loadState() {
           temp.innerHTML = html;
           const task = temp.firstElementChild;
           
-          // Sanitização preventiva de dados antigos
           if (task.dataset.start) task.dataset.start = normalizeTimeString(task.dataset.start);
           if (task.dataset.end) task.dataset.end = normalizeTimeString(task.dataset.end);
           
