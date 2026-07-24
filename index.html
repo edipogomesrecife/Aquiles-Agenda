@@ -22,7 +22,7 @@
   --radius: 10px;
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-  --hour-height: 80px;
+  --hour-height: 140px; /* Aumentado para dar espaço preciso aos blocos de 15min */
 }
 
 .light-theme {
@@ -438,12 +438,10 @@ header#appHeader {
 /* Cards de Tarefa */
 .task {
   position: absolute;
-  left: 4px;
-  right: 4px;
   background: #212634;
   border: 1px solid var(--surface-border);
   border-left: 4px solid var(--accent-gold);
-  padding: 6px 10px;
+  padding: 4px 8px;
   border-radius: 8px;
   cursor: pointer;
   box-shadow: var(--shadow-md);
@@ -454,15 +452,6 @@ header#appHeader {
   gap: 8px;
   overflow: hidden;
   box-sizing: border-box;
-}
-
-@media (min-width: 768px) {
-  .task {
-    left: 8px;
-    right: 8px;
-    padding: 8px 12px;
-    gap: 10px;
-  }
 }
 
 .light-theme .task { background: #ffffff; }
@@ -482,8 +471,8 @@ header#appHeader {
 
 .task-checkbox {
   appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border: 2px solid var(--text-muted);
   border-radius: 4px;
   outline: none;
@@ -502,10 +491,10 @@ header#appHeader {
   content: '✓';
   position: absolute;
   color: #111;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: bold;
   top: -2px;
-  left: 4px;
+  left: 3px;
 }
 
 .is-read-only .task { cursor: pointer !important; }
@@ -517,7 +506,7 @@ header#appHeader {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 1px;
   overflow: hidden;
 }
 
@@ -528,10 +517,7 @@ header#appHeader {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-@media (min-width: 768px) {
-  .task-title { font-size: 13px; }
+  line-height: 1.2;
 }
 
 .task-meta {
@@ -570,9 +556,9 @@ header#appHeader {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 6px 8px;
+  padding: 4px 6px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .btn-task-action:hover {
@@ -966,7 +952,7 @@ header#appHeader {
 </div>
 
 <script>
-const HOUR_HEIGHT = 80;
+const HOUR_HEIGHT = 140;
 
 const timelineLabels = document.getElementById('timelineLabels');
 const timelineGrid = document.getElementById('timelineGrid');
@@ -1003,7 +989,7 @@ let editingTask = null;
 let activeViewTask = null;
 let notifiedTasks = new Set(); 
 
-/* Normalização de horários (Ex: "15" -> "15:00") */
+/* Normalização de horários */
 function normalizeTimeString(timeStr) {
   if (!timeStr) return '';
   let str = timeStr.trim();
@@ -1020,7 +1006,6 @@ function normalizeTimeString(timeStr) {
   return str;
 }
 
-/* Auto-Mascara para digitar horario */
 function formatTimeInput(input) {
   input.addEventListener('input', (e) => {
     let value = e.target.value.replace(/\D/g, '');
@@ -1161,9 +1146,11 @@ for (let i = 0; i < 24; i++) {
   timelineGrid.appendChild(gridLine);
 }
 
-/* RENDERIZADOR BASEADO EM TEMPO REAL */
+/* RENDERIZADOR COM TRATAMENTO DE SOBREPOSIÇÃO (COLUNAS LADO A LADO) */
 function renderLayout() {
   const tasks = Array.from(timelineGrid.querySelectorAll('.task'));
+
+  const parsedTasks = [];
 
   tasks.forEach(taskElement => {
     const start = normalizeTimeString(taskElement.dataset.start);
@@ -1174,24 +1161,71 @@ function renderLayout() {
       taskElement.style.position = 'relative';
       taskElement.style.top = 'auto';
       taskElement.style.height = 'auto';
+      taskElement.style.left = '0';
+      taskElement.style.width = '100%';
       return;
     }
 
-    const startMinutes = timeToMinutes(start);
-    let endMinutes = end ? timeToMinutes(end) : startMinutes + 15;
-    
-    // Garante que o horário de término nunca seja menor que o de início
-    if (endMinutes <= startMinutes) endMinutes = startMinutes + 15;
+    const startMin = timeToMinutes(start);
+    let endMin = end ? timeToMinutes(end) : startMin + 15;
+    if (endMin <= startMin) endMin = startMin + 15;
 
-    const durationMinutes = endMinutes - startMinutes;
+    parsedTasks.push({
+      element: taskElement,
+      startMin,
+      endMin
+    });
+  });
 
-    // Converte minutos diretamente para pixels no grid
-    const topPx = (startMinutes / 60) * HOUR_HEIGHT;
-    const heightPx = Math.max(38, (durationMinutes / 60) * HOUR_HEIGHT);
+  // Ordena por horário de início
+  parsedTasks.sort((a, b) => a.startMin - b.startMin || (b.endMin - b.startMin) - (a.endMin - a.startMin));
 
-    taskElement.style.position = 'absolute';
-    taskElement.style.top = `${topPx}px`;
-    taskElement.style.height = `${heightPx}px`;
+  // Detecta grupos de sobreposição e divide a largura em colunas
+  const clusters = [];
+  parsedTasks.forEach(task => {
+    let placed = false;
+    for (const cluster of clusters) {
+      const overlaps = cluster.some(t => task.startMin < t.endMin && task.endMin > t.startMin);
+      if (overlaps) {
+        cluster.push(task);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      clusters.push([task]);
+    }
+  });
+
+  clusters.forEach(cluster => {
+    // Para cada grupo que se sobrepõe, aloca colunas
+    const columns = [];
+    cluster.forEach(task => {
+      let colIndex = 0;
+      while (columns[colIndex] && columns[colIndex].some(t => task.startMin < t.endMin && task.endMin > t.startMin)) {
+        colIndex++;
+      }
+      if (!columns[colIndex]) columns[colIndex] = [];
+      columns[colIndex].push(task);
+      task.colIndex = colIndex;
+    });
+
+    const totalCols = columns.length;
+
+    cluster.forEach(task => {
+      const topPx = (task.startMin / 60) * HOUR_HEIGHT;
+      const durationMin = task.endMin - task.startMin;
+      const heightPx = Math.max(32, (durationMin / 60) * HOUR_HEIGHT - 2);
+
+      const colWidthPercent = 100 / totalCols;
+      const leftPercent = task.colIndex * colWidthPercent;
+
+      task.element.style.position = 'absolute';
+      task.element.style.top = `${topPx}px`;
+      task.element.style.height = `${heightPx}px`;
+      task.element.style.left = `calc(${leftPercent}% + 4px)`;
+      task.element.style.width = `calc(${colWidthPercent}% - 8px)`;
+    });
   });
 }
 
