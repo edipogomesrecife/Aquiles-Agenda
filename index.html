@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>AURA OS | AGENDA</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -58,7 +58,7 @@ header#appHeader {
   min-height: 60px;
   background: var(--surface);
   border-bottom: 1px solid var(--surface-border);
-  padding: 16px 24px;
+  padding: 12px 16px;
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
@@ -68,24 +68,24 @@ header#appHeader {
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .logo-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
   color: var(--text-main);
 }
 
 .brand-divider {
   width: 1px;
-  height: 18px;
+  height: 16px;
   background: var(--surface-border);
 }
 
 .logo-subtitle {
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 1px;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -95,22 +95,22 @@ header#appHeader {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .btn-header {
   background: transparent;
   border: 1px solid var(--surface-border);
   color: var(--text-main);
-  padding: 6px 12px;
+  padding: 6px 10px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   transition: all 0.2s;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .btn-header:hover { border-color: var(--text-muted); }
@@ -125,11 +125,11 @@ header#appHeader {
 .dashboard-stats {
   max-width: 1400px;
   width: 100%;
-  margin: 16px auto 0;
-  padding: 0 16px;
+  margin: 12px auto 0;
+  padding: 0 12px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
@@ -138,6 +138,7 @@ header#appHeader {
     grid-template-columns: repeat(4, 1fr);
     padding: 0 24px;
     gap: 16px;
+    margin-top: 16px;
   }
 }
 
@@ -145,12 +146,12 @@ header#appHeader {
   background: var(--surface);
   border: 1px solid var(--surface-border);
   border-radius: var(--radius);
-  padding: 10px 14px;
+  padding: 8px 12px;
   box-shadow: var(--shadow-sm);
 }
 
 .stat-title {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -158,7 +159,7 @@ header#appHeader {
 }
 
 .stat-value {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   margin-top: 2px;
   color: var(--text-main);
@@ -169,10 +170,10 @@ header#appHeader {
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
-  padding: 16px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   flex: 1;
 }
 
@@ -189,7 +190,7 @@ header#appHeader {
 .sidebar-container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 /* BLOCO DE DATA */
@@ -197,7 +198,7 @@ header#appHeader {
   background: var(--surface);
   border: 1px solid var(--surface-border);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 14px;
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
@@ -207,10 +208,10 @@ header#appHeader {
 
 .date-subtitle {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--accent-gold);
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
 }
 
@@ -232,7 +233,7 @@ header#appHeader {
 }
 
 .date-main-title {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 800;
   color: var(--text-main);
   line-height: 1.1;
@@ -242,26 +243,26 @@ header#appHeader {
 
 .date-display {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .date-nav-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: 14px;
+  right: 14px;
 }
 
 .btn-date-nav {
   background: var(--bg);
   border: 1px solid var(--surface-border);
   color: var(--text-main);
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 6px;
   cursor: pointer;
   display: flex;
@@ -288,16 +289,16 @@ header#appHeader {
   background: var(--surface);
   border: 1px solid var(--surface-border);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 14px;
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
 }
 
 .panel-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   color: var(--text-main);
 }
 
@@ -312,7 +313,7 @@ header#appHeader {
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
-  margin-top: 12px;
+  margin-top: 10px;
   flex-shrink: 0;
 }
 
@@ -329,9 +330,9 @@ header#appHeader {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 300px;
+  max-height: 220px;
   overflow-y: auto;
-  min-height: 60px;
+  min-height: 50px;
 }
 
 #backlog.drag-over {
@@ -353,19 +354,17 @@ header#appHeader {
   background: var(--surface);
   border: 1px solid var(--surface-border);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 12px;
   box-shadow: var(--shadow-sm);
   display: flex;
   gap: 0;
   overflow-y: auto;
-  height: calc(100vh - 200px);
-  min-height: 500px;
+  height: calc(100vh - 220px);
+  min-height: 450px;
 }
 
 @media (min-width: 900px) {
-  .main {
-    padding: 20px;
-  }
+  .main { padding: 20px; }
 }
 
 .main::-webkit-scrollbar, #backlog::-webkit-scrollbar { width: 6px; }
@@ -373,7 +372,7 @@ header#appHeader {
 .main::-webkit-scrollbar-thumb, #backlog::-webkit-scrollbar-thumb { background: var(--surface-border); border-radius: 3px; }
 
 .timeline-labels {
-  width: 55px;
+  width: 50px;
   flex-shrink: 0;
 }
 
@@ -481,8 +480,8 @@ header#appHeader {
 
 .task-checkbox {
   appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: 2px solid var(--text-muted);
   border-radius: 4px;
   outline: none;
@@ -501,10 +500,10 @@ header#appHeader {
   content: '✓';
   position: absolute;
   color: #111;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: bold;
   top: -2px;
-  left: 3px;
+  left: 4px;
 }
 
 .is-read-only .task { cursor: pointer !important; }
@@ -569,7 +568,7 @@ header#appHeader {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 6px 8px;
   border-radius: 4px;
   font-size: 12px;
 }
@@ -639,22 +638,16 @@ header#appHeader {
   background: var(--bg);
   border: 1px solid var(--surface-border);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 12px;
   color: var(--text-main);
-  font-size: 14px;
+  font-size: 15px;
   outline: none;
   font-family: inherit;
   transition: all 0.2s;
 }
 
-/* Estilo ajustado para os seletores de horário digitáveis */
-input[type="time"].form-input {
-  color-scheme: dark;
+.form-input-time {
   font-family: 'JetBrains Mono', monospace;
-}
-
-.light-theme input[type="time"].form-input {
-  color-scheme: light;
 }
 
 .form-input:focus, .form-textarea:focus { border-color: var(--accent-gold); }
@@ -676,7 +669,7 @@ input[type="time"].form-input {
   background: transparent;
   border: 1px solid var(--surface-border);
   color: var(--text-main);
-  padding: 10px 16px;
+  padding: 12px 16px;
   border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
@@ -686,7 +679,7 @@ input[type="time"].form-input {
   background: var(--accent-gold);
   color: #111;
   border: none;
-  padding: 10px 20px;
+  padding: 12px 20px;
   border-radius: 8px;
   font-weight: 700;
   cursor: pointer;
@@ -710,7 +703,7 @@ input[type="time"].form-input {
 }
 
 .view-modal-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
   color: var(--text-main);
   line-height: 1.2;
@@ -771,16 +764,19 @@ input[type="time"].form-input {
 
 .view-modal-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  margin-top: 24px;
+  gap: 10px;
+  margin-top: 20px;
   padding-top: 14px;
   border-top: 1px solid var(--surface-border);
 }
 
 .view-footer-left {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .btn-view-action {
@@ -794,7 +790,7 @@ input[type="time"].form-input {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   transition: all 0.2s;
 }
 
@@ -844,14 +840,14 @@ input[type="time"].form-input {
     <div class="logo-subtitle">AGENDA</div>
   </div>
   <div class="header-actions">
-    <button class="btn-header btn-notify" id="notifyToggle">🔕 Ativar Notificações</button>
-    <button class="btn-header" id="themeToggle">☀️ Modo Claro</button>
+    <button class="btn-header btn-notify" id="notifyToggle">🔔 Notificações</button>
+    <button class="btn-header" id="themeToggle">☀️ Tema</button>
   </div>
 </header>
 
 <div class="dashboard-stats">
   <div class="stat-card">
-    <div class="stat-title">Total de Tarefas</div>
+    <div class="stat-title">Total</div>
     <div class="stat-value" id="statTotal">0</div>
   </div>
   <div class="stat-card">
@@ -863,7 +859,7 @@ input[type="time"].form-input {
     <div class="stat-value" id="statPending">0</div>
   </div>
   <div class="stat-card">
-    <div class="stat-title">Taxa de Execução</div>
+    <div class="stat-title">Execução</div>
     <div class="stat-value" id="statRate">0%</div>
   </div>
 </div>
@@ -898,7 +894,7 @@ input[type="time"].form-input {
   </div>
 </div>
 
-<!-- Lista de Sugestões de Horários (Datalist) -->
+<!-- Datalist com sugestões de horários -->
 <datalist id="hoursList"></datalist>
 
 <!-- Modal Edição / Criar -->
@@ -908,23 +904,23 @@ input[type="time"].form-input {
     <form id="taskForm">
       <div class="form-group">
         <label class="form-label">TÍTULO</label>
-        <input type="text" id="taskTitleInput" class="form-input" placeholder="Ex.: Edição 15 anos" required>
+        <input type="text" id="taskTitleInput" class="form-input" placeholder="Ex.: Reunião de equipe" required>
       </div>
 
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">INÍCIO</label>
-          <input type="time" id="taskStartInput" class="form-input" list="hoursList" step="900">
+          <label class="form-label">INÍCIO (HH:MM)</label>
+          <input type="text" id="taskStartInput" class="form-input form-input-time" list="hoursList" placeholder="08:00" maxlength="5" inputmode="numeric">
         </div>
         <div class="form-group">
-          <label class="form-label">FIM</label>
-          <input type="time" id="taskEndInput" class="form-input" list="hoursList" step="900">
+          <label class="form-label">FIM (HH:MM)</label>
+          <input type="text" id="taskEndInput" class="form-input form-input-time" list="hoursList" placeholder="09:00" maxlength="5" inputmode="numeric">
         </div>
       </div>
 
       <div class="form-group">
         <label class="form-label">NOTAS (OPCIONAL)</label>
-        <textarea id="taskNotesInput" class="form-textarea" rows="3" placeholder="Ex.: Adicionar mais 10 takes"></textarea>
+        <textarea id="taskNotesInput" class="form-textarea" rows="3" placeholder="Detalhes adicionais..."></textarea>
       </div>
 
       <div class="modal-actions">
@@ -1005,19 +1001,35 @@ let editingTask = null;
 let activeViewTask = null;
 let notifiedTasks = new Set(); 
 
+/* Auto-Mascara para digitar horario no Celular (ex: 0800 vira 08:00) */
+function formatTimeInput(input) {
+  input.addEventListener('input', (e) => {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 4) value = value.slice(0, 4);
+    if (value.length >= 3) {
+      e.target.value = value.slice(0, 2) + ':' + value.slice(2);
+    } else {
+      e.target.value = value;
+    }
+  });
+}
+formatTimeInput(taskStartInput);
+formatTimeInput(taskEndInput);
+
 function isPastDate(targetDate) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
   const checkDate = new Date(targetDate);
   checkDate.setHours(0, 0, 0, 0);
-
   return checkDate < today;
 }
 
 function timeToMinutes(timeStr) {
   if (!timeStr) return 0;
-  const [h, m] = timeStr.split(':').map(Number);
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return 0;
+  const h = parseInt(parts[0], 10) || 0;
+  const m = parseInt(parts[1], 10) || 0;
   return h * 60 + m;
 }
 
@@ -1082,7 +1094,6 @@ function changeDate() {
   loadState();
 }
 
-/* Preenche as sugestões no datalist (de 15 em 15 minutos) */
 function populateTimeSuggestions() {
   const hoursList = document.getElementById('hoursList');
   hoursList.innerHTML = '';
@@ -1100,12 +1111,9 @@ populateTimeSuggestions();
 
 taskStartInput.onchange = () => {
   const startVal = taskStartInput.value;
-  if (!startVal) {
-    taskEndInput.value = '';
-    return;
-  }
+  if (!startVal || startVal.length < 5) return;
   if (!taskEndInput.value || timeToMinutes(taskEndInput.value) <= timeToMinutes(startVal)) {
-    let totalMin = timeToMinutes(startVal) + 15;
+    let totalMin = timeToMinutes(startVal) + 30;
     if (totalMin >= 24 * 60) totalMin = 24 * 60 - 15;
     const endH = String(Math.floor(totalMin / 60)).padStart(2, '0');
     const endM = String(totalMin % 60).padStart(2, '0');
@@ -1168,50 +1176,46 @@ function renderLayout() {
   });
 }
 
-/* SISTEMA DE NOTIFICAÇÕES */
+/* SISTEMA DE NOTIFICAÇÕES (MÓVEL & DESKTOP) */
 function updateNotifyButton() {
   const notifyBtn = document.getElementById('notifyToggle');
   if (!notifyBtn) return;
 
   if (!("Notification" in window)) {
-    notifyBtn.style.display = 'none';
+    notifyBtn.innerHTML = '🔕 Sem Notificações';
     return;
   }
   
   if (Notification.permission === "granted") {
     notifyBtn.classList.add('active');
-    notifyBtn.innerHTML = '🔔 Notificações Ativas';
+    notifyBtn.innerHTML = '🔔 Ativas';
   } else {
     notifyBtn.classList.remove('active');
-    notifyBtn.innerHTML = '🔕 Ativar Notificações';
+    notifyBtn.innerHTML = '🔕 Ativar';
   }
 }
 
 notifyToggle.onclick = () => {
   if (!("Notification" in window)) {
-    alert("Seu navegador não suporta notificações.");
+    alert("Seu celular/navegador não suporta notificações em segundo plano diretamente nesta aba. Caso use iPhone, adicione este site à Tela de Início (Safari) para liberar as notificações!");
     return;
   }
 
   if (Notification.permission === "granted") {
     updateNotifyButton();
-    new Notification("AURA OS | Agenda", { 
-      body: "As notificações já estão ativas e funcionando!" 
-    });
+    new Notification("AURA OS | Agenda", { body: "Notificações ativas no celular!" });
     return;
   }
 
   if (Notification.permission === "denied") {
-    alert("As notificações estão bloqueadas no seu navegador. Para ativar, clique no ícone de 'Permitido' / 'Cadeado' ao lado da barra de endereço e libere as Notificações.");
+    alert("As notificações foram bloqueadas nas configurações do celular. Toque no ícone de 'Cadeado' ou 'Ajustes' ao lado do endereço do site para liberar!");
     return;
   }
 
   Notification.requestPermission().then(permission => {
     updateNotifyButton();
     if (permission === "granted") {
-      new Notification("AURA OS | Agenda", { 
-        body: "Notificações ativadas com sucesso!" 
-      });
+      new Notification("AURA OS | Agenda", { body: "Notificações ativadas!" });
     }
   });
 };
@@ -1289,7 +1293,6 @@ function openModal(defaultStart = '', taskToEdit = null) {
   }
 
   taskModal.classList.add('active');
-  document.getElementById('taskTitleInput').focus();
 }
 
 function closeModal() {
@@ -1316,7 +1319,7 @@ function openViewModal(task) {
   } else if (start) {
     viewTaskTime.textContent = `${start}`;
   } else {
-    viewTaskTime.textContent = 'Sem horário definido (Sem horário)';
+    viewTaskTime.textContent = 'Sem horário definido';
   }
 
   viewTaskNotes.textContent = notes ? notes : 'Nenhuma anotação informada.';
@@ -1414,7 +1417,7 @@ function loadState() {
   const savedTheme = localStorage.getItem('aura_theme_light');
   if (savedTheme === 'true') {
     document.body.classList.add('light-theme');
-    themeToggle.textContent = '🌙 Modo Escuro';
+    themeToggle.textContent = '🌙 Tema';
   }
 
   const saved = localStorage.getItem(getDateKey());
@@ -1601,8 +1604,8 @@ taskForm.onsubmit = (e) => {
   if (isReadOnly) return;
 
   const title = document.getElementById('taskTitleInput').value.trim();
-  const start = taskStartInput.value;
-  const end = taskEndInput.value;
+  const start = taskStartInput.value.trim();
+  const end = taskEndInput.value.trim();
   const notes = document.getElementById('taskNotesInput').value.trim();
 
   if (!title) return;
@@ -1684,7 +1687,7 @@ function updateStats() {
 themeToggle.onclick = () => {
   document.body.classList.toggle('light-theme');
   const isLight = document.body.classList.contains('light-theme');
-  themeToggle.textContent = isLight ? '🌙 Modo Escuro' : '☀️ Modo Claro';
+  themeToggle.textContent = isLight ? '🌙 Tema' : '☀️ Tema';
   localStorage.setItem('aura_theme_light', isLight);
 };
 
