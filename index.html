@@ -387,13 +387,15 @@ header#appHeader {
   color: var(--text-muted);
   font-family: 'JetBrains Mono', monospace;
   padding-top: 2px;
+  transition: height 0.2s ease;
+  display: flex;
+  align-items: flex-start;
 }
 
 .timeline-grid {
   flex: 1;
   position: relative;
   border-left: 1px solid var(--surface-border);
-  min-height: calc(24 * var(--hour-height)); 
 }
 
 .grid-line {
@@ -403,6 +405,7 @@ header#appHeader {
   position: relative;
   cursor: pointer;
   padding: 8px;
+  transition: height 0.2s ease;
 }
 
 .grid-line::before {
@@ -445,7 +448,7 @@ header#appHeader {
   border-radius: 8px;
   cursor: pointer;
   box-shadow: var(--shadow-md);
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.2s, background 0.2s, top 0.2s, height 0.2s;
   z-index: 10;
   display: flex;
   align-items: center;
@@ -966,6 +969,8 @@ header#appHeader {
 <script>
 const HOUR_HEIGHT = 80;
 const MIN_CARD_HEIGHT = 52;
+const CARD_GAP = 6;
+
 const timelineLabels = document.getElementById('timelineLabels');
 const timelineGrid = document.getElementById('timelineGrid');
 const backlog = document.getElementById('backlog');
@@ -1001,6 +1006,23 @@ let editingTask = null;
 let activeViewTask = null;
 let notifiedTasks = new Set(); 
 
+/* Função para sanitizar e normalizar string de hora (ex: "15" -> "15:00", "8:3" -> "08:30") */
+function normalizeTimeString(timeStr) {
+  if (!timeStr) return '';
+  let str = timeStr.trim();
+  if (str.length === 2 && !str.includes(':')) {
+    str += ':00';
+  } else if (str.length === 1 && !str.includes(':')) {
+    str = '0' + str + ':00';
+  } else if (str.includes(':')) {
+    const parts = str.split(':');
+    const h = String(parseInt(parts[0], 10) || 0).padStart(2, '0');
+    const m = String(parseInt(parts[1], 10) || 0).padStart(2, '0');
+    str = `${h}:${m}`;
+  }
+  return str;
+}
+
 /* Auto-Mascara para digitar horario no Celular (ex: 0800 vira 08:00) */
 function formatTimeInput(input) {
   input.addEventListener('input', (e) => {
@@ -1026,7 +1048,8 @@ function isPastDate(targetDate) {
 
 function timeToMinutes(timeStr) {
   if (!timeStr) return 0;
-  const parts = timeStr.split(':');
+  const normalized = normalizeTimeString(timeStr);
+  const parts = normalized.split(':');
   if (parts.length < 2) return 0;
   const h = parseInt(parts[0], 10) || 0;
   const m = parseInt(parts[1], 10) || 0;
@@ -1110,8 +1133,8 @@ function populateTimeSuggestions() {
 populateTimeSuggestions();
 
 taskStartInput.onchange = () => {
-  const startVal = taskStartInput.value;
-  if (!startVal || startVal.length < 5) return;
+  const startVal = normalizeTimeString(taskStartInput.value);
+  if (!startVal) return;
   if (!taskEndInput.value || timeToMinutes(taskEndInput.value) <= timeToMinutes(startVal)) {
     let totalMin = timeToMinutes(startVal) + 30;
     if (totalMin >= 24 * 60) totalMin = 24 * 60 - 15;
@@ -1126,11 +1149,13 @@ for (let i = 0; i < 24; i++) {
   
   const labelRow = document.createElement('div');
   labelRow.className = 'label-row';
+  labelRow.dataset.hourIndex = i;
   labelRow.textContent = hourStr;
   timelineLabels.appendChild(labelRow);
 
   const gridLine = document.createElement('div');
   gridLine.className = 'grid-line';
+  gridLine.dataset.hourIndex = i;
   gridLine.dataset.hour = hourStr;
   gridLine.dataset.hoverText = `+ tarefa às ${hourStr}`;
   gridLine.onclick = () => {
@@ -1139,16 +1164,17 @@ for (let i = 0; i < 24; i++) {
   timelineGrid.appendChild(gridLine);
 }
 
+/* RENDERIZADOR DINÂMICO DE LAYOUT */
 function renderLayout() {
+  const hourHeights = new Array(24).fill(HOUR_HEIGHT);
   const tasks = Array.from(timelineGrid.querySelectorAll('.task'));
+  
   tasks.sort((a, b) => timeToMinutes(a.dataset.start) - timeToMinutes(b.dataset.start));
 
-  let lastTop = -1;
+  const tasksByHour = Array.from({ length: 24 }, () => []);
 
   tasks.forEach(taskElement => {
-    const start = taskElement.dataset.start;
-    const end = taskElement.dataset.end;
-
+    const start = normalizeTimeString(taskElement.dataset.start);
     if (!start) {
       backlog.appendChild(taskElement);
       taskElement.style.position = 'relative';
@@ -1157,23 +1183,68 @@ function renderLayout() {
       return;
     }
 
-    const startMin = timeToMinutes(start);
-    const endMin = end ? timeToMinutes(end) : startMin + 15;
-    const durationMin = Math.max(15, endMin - startMin);
-
-    let calculatedTop = (startMin / 60) * HOUR_HEIGHT;
-    let calculatedHeight = Math.max(MIN_CARD_HEIGHT, (durationMin / 60) * HOUR_HEIGHT);
-
-    if (calculatedTop < lastTop + MIN_CARD_HEIGHT) {
-      calculatedTop = lastTop + MIN_CARD_HEIGHT + 4;
+    const hour = Math.floor(timeToMinutes(start) / 60);
+    if (hour >= 0 && hour < 24) {
+      tasksByHour[hour].push(taskElement);
     }
-
-    taskElement.style.position = 'absolute';
-    taskElement.style.top = `${calculatedTop}px`;
-    taskElement.style.height = `${calculatedHeight}px`;
-
-    lastTop = calculatedTop;
   });
+
+  // Calcula expansão da altura necessária em cada hora
+  for (let h = 0; h < 24; h++) {
+    const hourTasks = tasksByHour[h];
+    if (hourTasks.length > 0) {
+      let requiredHeight = 0;
+      hourTasks.forEach(taskElement => {
+        const start = normalizeTimeString(taskElement.dataset.start);
+        const end = normalizeTimeString(taskElement.dataset.end);
+        const startMin = timeToMinutes(start);
+        const endMin = end ? timeToMinutes(end) : startMin + 15;
+        const durationMin = Math.max(15, endMin - startMin);
+        const taskHeight = Math.max(MIN_CARD_HEIGHT, (durationMin / 60) * HOUR_HEIGHT);
+        
+        requiredHeight += taskHeight + CARD_GAP;
+      });
+      hourHeights[h] = Math.max(HOUR_HEIGHT, requiredHeight + 4);
+    }
+  }
+
+  // Atualiza a altura das linhas no grid e no painel de horas
+  const gridLines = timelineGrid.querySelectorAll('.grid-line');
+  const labelRows = timelineLabels.querySelectorAll('.label-row');
+  
+  const hourOffsets = new Array(24).fill(0);
+  let currentOffset = 0;
+
+  for (let h = 0; h < 24; h++) {
+    hourOffsets[h] = currentOffset;
+    const hHeight = hourHeights[h];
+    gridLines[h].style.height = `${hHeight}px`;
+    labelRows[h].style.height = `${hHeight}px`;
+    currentOffset += hHeight;
+  }
+
+  // Posiciona perfeitamente cada card dentro do grid
+  for (let h = 0; h < 24; h++) {
+    const hourTasks = tasksByHour[h];
+    let topInHour = hourOffsets[h] + 4;
+
+    hourTasks.forEach(taskElement => {
+      const start = normalizeTimeString(taskElement.dataset.start);
+      const end = normalizeTimeString(taskElement.dataset.end);
+
+      const startMin = timeToMinutes(start);
+      const endMin = end ? timeToMinutes(end) : startMin + 15;
+      const durationMin = Math.max(15, endMin - startMin);
+
+      const baseHeight = Math.max(MIN_CARD_HEIGHT, (durationMin / 60) * HOUR_HEIGHT);
+
+      taskElement.style.position = 'absolute';
+      taskElement.style.top = `${topInHour}px`;
+      taskElement.style.height = `${baseHeight}px`;
+
+      topInHour += baseHeight + CARD_GAP;
+    });
+  }
 }
 
 /* SISTEMA DE NOTIFICAÇÕES (MÓVEL & DESKTOP) */
@@ -1238,7 +1309,7 @@ function checkTaskNotifications() {
     if (isDone) return;
 
     const title = task.dataset.title;
-    const start = task.dataset.start;
+    const start = normalizeTimeString(task.dataset.start);
     if (!start) return;
 
     const startMin = timeToMinutes(start);
@@ -1307,8 +1378,8 @@ function openViewModal(task) {
   activeViewTask = task;
   
   const title = task.dataset.title || 'Sem título';
-  const start = task.dataset.start || '';
-  const end = task.dataset.end || '';
+  const start = normalizeTimeString(task.dataset.start);
+  const end = normalizeTimeString(task.dataset.end);
   const notes = task.dataset.notes || '';
   const isDone = task.querySelector('.task-checkbox').checked;
 
@@ -1430,6 +1501,25 @@ function loadState() {
           const temp = document.createElement('div');
           temp.innerHTML = html;
           const task = temp.firstElementChild;
+          
+          // Sanitização preventiva de dados antigos
+          if (task.dataset.start) task.dataset.start = normalizeTimeString(task.dataset.start);
+          if (task.dataset.end) task.dataset.end = normalizeTimeString(task.dataset.end);
+          
+          const start = task.dataset.start;
+          const end = task.dataset.end;
+          let timeDisplay = '';
+          if (start && end) timeDisplay = `${start} - ${end}`;
+          else if (start) timeDisplay = start;
+
+          const meta = task.querySelector('.task-meta');
+          if (meta) {
+            meta.innerHTML = `
+              ${timeDisplay ? `<span class="task-time-range">${timeDisplay}</span>` : ''}
+              ${task.dataset.notes ? `<span>• ${task.dataset.notes}</span>` : ''}
+            `;
+          }
+
           timelineGrid.appendChild(task);
         });
       }
@@ -1604,8 +1694,8 @@ taskForm.onsubmit = (e) => {
   if (isReadOnly) return;
 
   const title = document.getElementById('taskTitleInput').value.trim();
-  const start = taskStartInput.value.trim();
-  const end = taskEndInput.value.trim();
+  const start = normalizeTimeString(taskStartInput.value);
+  const end = normalizeTimeString(taskEndInput.value);
   const notes = document.getElementById('taskNotesInput').value.trim();
 
   if (!title) return;
