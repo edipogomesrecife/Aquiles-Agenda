@@ -22,7 +22,7 @@
   --radius: 10px;
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-  --hour-height: 140px; /* Aumentado para dar espaço preciso aos blocos de 15min */
+  --hour-height: 140px;
 }
 
 .light-theme {
@@ -571,7 +571,7 @@ header#appHeader {
   background: rgba(239, 68, 68, 0.15);
 }
 
-/* Modal Base */
+/* Modais */
 .modal-overlay {
   display: none;
   position: fixed;
@@ -673,7 +673,6 @@ header#appHeader {
   cursor: pointer;
 }
 
-/* Modal Detalhes */
 .view-modal-header {
   display: flex;
   align-items: flex-start;
@@ -722,9 +721,7 @@ header#appHeader {
   border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
-.view-section {
-  margin-bottom: 14px;
-}
+.view-section { margin-bottom: 14px; }
 
 .view-section-label {
   font-size: 10px;
@@ -882,10 +879,9 @@ header#appHeader {
   </div>
 </div>
 
-<!-- Datalist com sugestões de horários -->
 <datalist id="hoursList"></datalist>
 
-<!-- Modal Edição / Criar -->
+<!-- Modal Criar / Editar -->
 <div class="modal-overlay" id="taskModal">
   <div class="modal">
     <div class="modal-header" id="modalTitleText">Nova tarefa</div>
@@ -919,7 +915,7 @@ header#appHeader {
   </div>
 </div>
 
-<!-- Modal Visualizar Detalhes -->
+<!-- Modal Detalhes -->
 <div class="modal-overlay" id="viewTaskModal">
   <div class="modal">
     <div class="view-modal-header">
@@ -989,7 +985,6 @@ let editingTask = null;
 let activeViewTask = null;
 let notifiedTasks = new Set(); 
 
-/* Normalização de horários */
 function normalizeTimeString(timeStr) {
   if (!timeStr) return '';
   let str = timeStr.trim();
@@ -1146,10 +1141,8 @@ for (let i = 0; i < 24; i++) {
   timelineGrid.appendChild(gridLine);
 }
 
-/* RENDERIZADOR COM TRATAMENTO DE SOBREPOSIÇÃO (COLUNAS LADO A LADO) */
 function renderLayout() {
   const tasks = Array.from(timelineGrid.querySelectorAll('.task'));
-
   const parsedTasks = [];
 
   tasks.forEach(taskElement => {
@@ -1177,10 +1170,8 @@ function renderLayout() {
     });
   });
 
-  // Ordena por horário de início
   parsedTasks.sort((a, b) => a.startMin - b.startMin || (b.endMin - b.startMin) - (a.endMin - a.startMin));
 
-  // Detecta grupos de sobreposição e divide a largura em colunas
   const clusters = [];
   parsedTasks.forEach(task => {
     let placed = false;
@@ -1198,7 +1189,6 @@ function renderLayout() {
   });
 
   clusters.forEach(cluster => {
-    // Para cada grupo que se sobrepõe, aloca colunas
     const columns = [];
     cluster.forEach(task => {
       let colIndex = 0;
@@ -1229,13 +1219,14 @@ function renderLayout() {
   });
 }
 
-/* SISTEMA DE NOTIFICAÇÕES */
+/* NOTIFICAÇÕES SEGURO PARA WEBVIEW / APP */
 function updateNotifyButton() {
   const notifyBtn = document.getElementById('notifyToggle');
   if (!notifyBtn) return;
 
-  if (!("Notification" in window)) {
-    notifyBtn.innerHTML = '🔕 Sem Notificações';
+  if (window.location.protocol === 'file:' || !("Notification" in window)) {
+    notifyBtn.innerHTML = '🔕 Indisponível no App';
+    notifyBtn.style.opacity = '0.6';
     return;
   }
   
@@ -1249,8 +1240,13 @@ function updateNotifyButton() {
 }
 
 notifyToggle.onclick = () => {
+  if (window.location.protocol === 'file:') {
+    alert("Para notificações em tempo real, acesse o link HTTPS no navegador ou instale via PWA (Adicionar à tela inicial).");
+    return;
+  }
+
   if (!("Notification" in window)) {
-    alert("Seu navegador não suporta notificações.");
+    alert("Este navegador ou aplicativo não dá suporte a notificações.");
     return;
   }
 
@@ -1261,7 +1257,7 @@ notifyToggle.onclick = () => {
   }
 
   if (Notification.permission === "denied") {
-    alert("Liberar notificações nas configurações do seu navegador.");
+    alert("Por favor, libere as notificações nas configurações do seu celular.");
     return;
   }
 
@@ -1274,7 +1270,7 @@ notifyToggle.onclick = () => {
 };
 
 function checkTaskNotifications() {
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  if (window.location.protocol === 'file:' || !("Notification" in window) || Notification.permission !== "granted") return;
 
   const now = new Date();
   const todayKey = getDateKey();
@@ -1320,7 +1316,6 @@ function checkTaskNotifications() {
 
 setInterval(checkTaskNotifications, 30000);
 
-/* MODAIS */
 function openModal(defaultStart = '', taskToEdit = null) {
   if (isReadOnly) return;
 
