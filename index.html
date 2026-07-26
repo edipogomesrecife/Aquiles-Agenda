@@ -8,6 +8,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
+<!-- Biblioteca Dexie.js para gerenciamento simplificado e robusto do IndexedDB -->
+<script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+
 <style>
 :root {
   --bg: #13171f;
@@ -948,6 +951,14 @@ header#appHeader {
 </div>
 
 <script>
+/* ----------------------------------------------------
+   CONFIGURAÇÃO DO BANCO DE DADOS LOCAL (IndexedDB via Dexie)
+---------------------------------------------------- */
+const db = new Dexie("AuraOSDatabase");
+db.version(1).stores({
+  tasks: 'id, dateKey, start, done'
+});
+
 const HOUR_HEIGHT = 140;
 
 const timelineLabels = document.getElementById('timelineLabels');
@@ -980,10 +991,13 @@ const btnCalendar = document.getElementById('btnCalendar');
 
 let currentDate = new Date();
 let isReadOnly = false;
-let draggedTask = null;
-let editingTask = null;
-let activeViewTask = null;
-let notifiedTasks = new Set(); 
+let draggedTaskId = null;
+let editingTaskId = null;
+let activeViewTaskId = null;
+let notifiedTasks = new Set();
+
+/* BANCO DE DADOS EM MEMÓRIA SINCRO COM INDEXEDDB */
+let tasksData = {};
 
 function normalizeTimeString(timeStr) {
   if (!timeStr) return '';
@@ -1089,9 +1103,9 @@ hiddenDatePicker.onchange = (e) => {
   }
 };
 
-function changeDate() {
+async function changeDate() {
   updateDateDisplay();
-  loadState();
+  await loadState();
 }
 
 function populateTimeSuggestions() {
@@ -1142,12 +1156,16 @@ for (let i = 0; i < 24; i++) {
 }
 
 function renderLayout() {
-  const tasks = Array.from(timelineGrid.querySelectorAll('.task'));
+  const tasks = Array.from(document.querySelectorAll('.task'));
   const parsedTasks = [];
 
   tasks.forEach(taskElement => {
-    const start = normalizeTimeString(taskElement.dataset.start);
-    const end = normalizeTimeString(taskElement.dataset.end);
+    const id = taskElement.id;
+    const data = tasksData[id];
+    if (!data) return;
+
+    const start = normalizeTimeString(data.start);
+    const end = normalizeTimeString(data.end);
 
     if (!start) {
       backlog.appendChild(taskElement);
@@ -1219,7 +1237,7 @@ function renderLayout() {
   });
 }
 
-/* NOTIFICAÇÕES SEGURO PARA WEBVIEW / APP */
+/* NOTIFICAÇÕES */
 function updateNotifyButton() {
   const notifyBtn = document.getElementById('notifyToggle');
   if (!notifyBtn) return;
@@ -1241,7 +1259,7 @@ function updateNotifyButton() {
 
 notifyToggle.onclick = () => {
   if (window.location.protocol === 'file:') {
-    alert("Para notificações em tempo real, acesse o link HTTPS no navegador ou instale via PWA (Adicionar à tela inicial).");
+    alert("Para notificações em tempo real, acesse o link HTTPS no navegador ou instale via PWA.");
     return;
   }
 
@@ -1282,19 +1300,18 @@ function checkTaskNotifications() {
 
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  document.querySelectorAll('.timeline-grid .task').forEach(task => {
-    const isDone = task.querySelector('.task-checkbox').checked;
-    if (isDone) return;
+  Object.values(tasksData).forEach(data => {
+    if (data.done) return;
 
-    const title = task.dataset.title;
-    const start = normalizeTimeString(task.dataset.start);
+    const title = data.title;
+    const start = normalizeTimeString(data.start);
     if (!start) return;
 
     const startMin = timeToMinutes(start);
     const diff = startMin - currentMinutes;
 
-    const notif10Key = `${todayKey}_${title}_${start}_10min`;
-    const notif0Key = `${todayKey}_${title}_${start}_now`;
+    const notif10Key = `${todayKey}_${data.id}_10min`;
+    const notif0Key = `${todayKey}_${data.id}_now`;
 
     if (diff <= 10 && diff > 0 && !notifiedTasks.has(notif10Key)) {
       notifiedTasks.add(notif10Key);
@@ -1316,18 +1333,19 @@ function checkTaskNotifications() {
 
 setInterval(checkTaskNotifications, 30000);
 
-function openModal(defaultStart = '', taskToEdit = null) {
+function openModal(defaultStart = '', taskIdToEdit = null) {
   if (isReadOnly) return;
 
   closeViewModal();
-  editingTask = taskToEdit;
+  editingTaskId = taskIdToEdit;
   
-  if (editingTask) {
+  if (editingTaskId && tasksData[editingTaskId]) {
+    const data = tasksData[editingTaskId];
     document.getElementById('modalTitleText').textContent = 'Editar tarefa';
-    document.getElementById('taskTitleInput').value = editingTask.dataset.title || '';
-    taskStartInput.value = editingTask.dataset.start || '';
-    taskEndInput.value = editingTask.dataset.end || '';
-    document.getElementById('taskNotesInput').value = editingTask.dataset.notes || '';
+    document.getElementById('taskTitleInput').value = data.title || '';
+    taskStartInput.value = data.start || '';
+    taskEndInput.value = data.end || '';
+    document.getElementById('taskNotesInput').value = data.notes || '';
   } else {
     document.getElementById('modalTitleText').textContent = 'Nova tarefa';
     document.getElementById('taskTitleInput').value = '';
@@ -1345,20 +1363,22 @@ function openModal(defaultStart = '', taskToEdit = null) {
 
 function closeModal() {
   taskModal.classList.remove('active');
-  editingTask = null;
+  editingTaskId = null;
 }
 
 document.getElementById('openModalBtn').onclick = () => openModal('');
 document.getElementById('closeModalBtn').onclick = closeModal;
 
-function openViewModal(task) {
-  activeViewTask = task;
+function openViewModal(taskId) {
+  activeViewTaskId = taskId;
+  const data = tasksData[taskId];
+  if (!data) return;
   
-  const title = task.dataset.title || 'Sem título';
-  const start = normalizeTimeString(task.dataset.start);
-  const end = normalizeTimeString(task.dataset.end);
-  const notes = task.dataset.notes || '';
-  const isDone = task.querySelector('.task-checkbox').checked;
+  const title = data.title || 'Sem título';
+  const start = normalizeTimeString(data.start);
+  const end = normalizeTimeString(data.end);
+  const notes = data.notes || '';
+  const isDone = data.done;
 
   viewTaskTitle.textContent = title;
   
@@ -1399,68 +1419,181 @@ function openViewModal(task) {
 
 function closeViewModal() {
   viewTaskModal.classList.remove('active');
-  activeViewTask = null;
+  activeViewTaskId = null;
 }
 
 closeViewModalBtn.onclick = closeViewModal;
 
-viewToggleDoneBtn.onclick = () => {
-  if (!activeViewTask || isReadOnly) return;
-  const cb = activeViewTask.querySelector('.task-checkbox');
+viewToggleDoneBtn.onclick = async () => {
+  if (!activeViewTaskId || isReadOnly) return;
+  const taskEl = document.getElementById(activeViewTaskId);
+  if (!taskEl) return;
+  
+  const cb = taskEl.querySelector('.task-checkbox');
   cb.checked = !cb.checked;
-  cb.onchange();
-  openViewModal(activeViewTask);
+  await cb.onchange();
+  openViewModal(activeViewTaskId);
 };
 
 viewEditBtn.onclick = () => {
-  if (!activeViewTask || isReadOnly) return;
-  const taskToEdit = activeViewTask;
+  if (!activeViewTaskId || isReadOnly) return;
+  const idToEdit = activeViewTaskId;
   closeViewModal();
-  openModal('', taskToEdit);
+  openModal('', idToEdit);
 };
 
-viewCloneBtn.onclick = () => {
-  if (!activeViewTask || isReadOnly) return;
-  const taskToClone = activeViewTask;
+viewCloneBtn.onclick = async () => {
+  if (!activeViewTaskId || isReadOnly) return;
+  const idToClone = activeViewTaskId;
   closeViewModal();
-  duplicateTask(taskToClone);
+  await duplicateTask(idToClone);
 };
 
-viewDeleteBtn.onclick = () => {
-  if (!activeViewTask || isReadOnly) return;
+viewDeleteBtn.onclick = async () => {
+  if (!activeViewTaskId || isReadOnly) return;
   if (confirm('Deseja realmente excluir esta tarefa?')) {
-    activeViewTask.remove();
+    const idToDelete = activeViewTaskId;
+    const taskEl = document.getElementById(idToDelete);
+    if (taskEl) taskEl.remove();
+    
+    delete tasksData[idToDelete];
+    await db.tasks.delete(idToDelete); // Remove do IndexedDB
+    
     closeViewModal();
     renderLayout();
-    saveState();
+    updateStats();
   }
 };
 
-function saveState() {
-  if (isReadOnly) return;
+function createTaskDOM(id) {
+  const data = tasksData[id];
+  if (!data) return null;
 
-  document.querySelectorAll('.task').forEach(t => {
-    const cb = t.querySelector('.task-checkbox');
-    if (cb.checked) {
-      cb.setAttribute('checked', 'checked');
-    } else {
-      cb.removeAttribute('checked');
+  const task = document.createElement('div');
+  task.className = 'task';
+  task.id = id;
+  if (data.done) task.classList.add('done');
+
+  // Checkbox
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'task-checkbox';
+  checkbox.checked = !!data.done;
+
+  // Detalhes
+  const details = document.createElement('div');
+  details.className = 'task-details';
+
+  const titleEl = document.createElement('div');
+  titleEl.className = 'task-title';
+  titleEl.textContent = data.title; // ✅ Seguro contra XSS
+
+  const metaEl = document.createElement('div');
+  metaEl.className = 'task-meta';
+
+  const start = normalizeTimeString(data.start);
+  const end = normalizeTimeString(data.end);
+  let timeDisplay = '';
+  if (start && end) timeDisplay = `${start} - ${end}`;
+  else if (start) timeDisplay = start;
+
+  if (timeDisplay) {
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'task-time-range';
+    timeSpan.textContent = timeDisplay;
+    metaEl.appendChild(timeSpan);
+  }
+
+  if (data.notes) {
+    const notesSpan = document.createElement('span');
+    notesSpan.textContent = ` • ${data.notes}`; // ✅ Seguro contra XSS
+    metaEl.appendChild(notesSpan);
+  }
+
+  details.appendChild(titleEl);
+  details.appendChild(metaEl);
+
+  // Ações
+  const actions = document.createElement('div');
+  actions.className = 'task-actions';
+
+  const cloneBtn = document.createElement('button');
+  cloneBtn.className = 'btn-task-action clone';
+  cloneBtn.title = 'Duplicar';
+  cloneBtn.textContent = '📋';
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'btn-task-action edit';
+  editBtn.title = 'Editar';
+  editBtn.textContent = '✏️';
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'btn-task-action del';
+  delBtn.title = 'Excluir';
+  delBtn.textContent = '✕';
+
+  actions.appendChild(cloneBtn);
+  actions.appendChild(editBtn);
+  actions.appendChild(delBtn);
+
+  task.appendChild(checkbox);
+  task.appendChild(details);
+  task.appendChild(actions);
+
+  bindTaskEvents(task);
+  return task;
+}
+
+function updateTaskDOM(id) {
+  const taskEl = document.getElementById(id);
+  const data = tasksData[id];
+  if (!taskEl || !data) return;
+
+  taskEl.classList.toggle('done', !!data.done);
+
+  const titleEl = taskEl.querySelector('.task-title');
+  if (titleEl) titleEl.textContent = data.title;
+
+  const metaEl = taskEl.querySelector('.task-meta');
+  if (metaEl) {
+    metaEl.innerHTML = '';
+    const start = normalizeTimeString(data.start);
+    const end = normalizeTimeString(data.end);
+    let timeDisplay = '';
+    if (start && end) timeDisplay = `${start} - ${end}`;
+    else if (start) timeDisplay = start;
+
+    if (timeDisplay) {
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'task-time-range';
+      timeSpan.textContent = timeDisplay;
+      metaEl.appendChild(timeSpan);
     }
-  });
 
-  const data = {
-    backlog: backlog.innerHTML,
-    gridTasks: Array.from(timelineGrid.querySelectorAll('.task')).map(t => t.outerHTML)
-  };
-  
-  localStorage.setItem(getDateKey(), JSON.stringify(data));
-  localStorage.setItem('aura_theme_light', document.body.classList.contains('light-theme'));
+    if (data.notes) {
+      const notesSpan = document.createElement('span');
+      notesSpan.textContent = ` • ${data.notes}`;
+      metaEl.appendChild(notesSpan);
+    }
+  }
+
+  const cb = taskEl.querySelector('.task-checkbox');
+  if (cb) cb.checked = !!data.done;
+}
+
+/* SALVA E ATUALIZA DADOS NO INDEXEDDB */
+async function saveTaskToDB(taskObj) {
+  if (isReadOnly) return;
+  taskObj.dateKey = getDateKey();
+  tasksData[taskObj.id] = taskObj;
+  await db.tasks.put(taskObj);
   updateStats();
 }
 
-function loadState() {
+async function loadState() {
   backlog.innerHTML = '';
   timelineGrid.querySelectorAll('.task').forEach(t => t.remove());
+  tasksData = {};
 
   const savedTheme = localStorage.getItem('aura_theme_light');
   if (savedTheme === 'true') {
@@ -1468,46 +1601,17 @@ function loadState() {
     themeToggle.textContent = '🌙 Tema';
   }
 
-  const saved = localStorage.getItem(getDateKey());
-  if (saved) {
-    try {
-      const data = JSON.parse(saved);
-      if (data.backlog) backlog.innerHTML = data.backlog;
-      if (data.gridTasks) {
-        data.gridTasks.forEach(html => {
-          const temp = document.createElement('div');
-          temp.innerHTML = html;
-          const task = temp.firstElementChild;
-          
-          if (task.dataset.start) task.dataset.start = normalizeTimeString(task.dataset.start);
-          if (task.dataset.end) task.dataset.end = normalizeTimeString(task.dataset.end);
-          
-          const start = task.dataset.start;
-          const end = task.dataset.end;
-          let timeDisplay = '';
-          if (start && end) timeDisplay = `${start} - ${end}`;
-          else if (start) timeDisplay = start;
+  const dateKey = getDateKey();
+  
+  // Muta para carregar do IndexedDB via Dexie
+  const tasksFromDB = await db.tasks.where('dateKey').equals(dateKey).toArray();
 
-          const meta = task.querySelector('.task-meta');
-          if (meta) {
-            meta.innerHTML = `
-              ${timeDisplay ? `<span class="task-time-range">${timeDisplay}</span>` : ''}
-              ${task.dataset.notes ? `<span>• ${task.dataset.notes}</span>` : ''}
-            `;
-          }
-
-          timelineGrid.appendChild(task);
-        });
-      }
-    } catch(e) {
-      console.error(e);
-    }
-  }
-
-  document.querySelectorAll('.task').forEach(t => {
-    const cb = t.querySelector('.task-checkbox');
-    if (cb.hasAttribute('checked')) {
-      cb.checked = true;
+  tasksFromDB.forEach(data => {
+    tasksData[data.id] = data;
+    const el = createTaskDOM(data.id);
+    if (el) {
+      if (data.start) timelineGrid.appendChild(el);
+      else backlog.appendChild(el);
     }
   });
 
@@ -1523,28 +1627,31 @@ function bindEvents() {
     backlog.classList.add('drag-over');
   };
   backlog.ondragleave = () => backlog.classList.remove('drag-over');
-  backlog.ondrop = e => {
+  backlog.ondrop = async e => {
     if (isReadOnly) return;
     e.preventDefault();
     backlog.classList.remove('drag-over');
-    if (draggedTask) {
-      draggedTask.dataset.start = '';
-      draggedTask.dataset.end = '';
-      const meta = draggedTask.querySelector('.task-meta');
-      meta.innerHTML = draggedTask.dataset.notes ? `<span>• ${draggedTask.dataset.notes}</span>` : '';
-      backlog.appendChild(draggedTask);
+    if (draggedTaskId && tasksData[draggedTaskId]) {
+      tasksData[draggedTaskId].start = '';
+      tasksData[draggedTaskId].end = '';
+      
+      const taskEl = document.getElementById(draggedTaskId);
+      if (taskEl) {
+        updateTaskDOM(draggedTaskId);
+        backlog.appendChild(taskEl);
+      }
       renderLayout();
-      saveState();
+      await saveTaskToDB(tasksData[draggedTaskId]);
     }
   };
 
   timelineGrid.ondragover = e => {
     if (!isReadOnly) e.preventDefault();
   };
-  timelineGrid.ondrop = e => {
+  timelineGrid.ondrop = async e => {
     if (isReadOnly) return;
     e.preventDefault();
-    if (draggedTask) {
+    if (draggedTaskId && tasksData[draggedTaskId]) {
       const rect = timelineGrid.getBoundingClientRect();
       const offsetY = e.clientY - rect.top;
       const minutesTotal = Math.max(0, Math.min(23 * 60 + 45, Math.floor((offsetY / HOUR_HEIGHT) * 4) * 15));
@@ -1554,27 +1661,27 @@ function bindEvents() {
       const newStart = `${startH}:${startM}`;
 
       let oldDuration = 15;
-      if (draggedTask.dataset.start && draggedTask.dataset.end) {
-        oldDuration = Math.max(15, timeToMinutes(draggedTask.dataset.end) - timeToMinutes(draggedTask.dataset.start));
+      const tData = tasksData[draggedTaskId];
+      if (tData.start && tData.end) {
+        oldDuration = Math.max(15, timeToMinutes(tData.end) - timeToMinutes(tData.start));
       }
       const endMin = minutesTotal + oldDuration;
       const endH = String(Math.floor(endMin / 60)).padStart(2, '0');
       const endM = String(endMin % 60).padStart(2, '0');
       const newEnd = `${endH}:${endM}`;
 
-      draggedTask.dataset.start = newStart;
-      draggedTask.dataset.end = newEnd;
+      tData.start = newStart;
+      tData.end = newEnd;
 
-      const meta = draggedTask.querySelector('.task-meta');
-      meta.innerHTML = `<span class="task-time-range">${newStart} - ${newEnd}</span>${draggedTask.dataset.notes ? ` <span>• ${draggedTask.dataset.notes}</span>` : ''}`;
-
-      timelineGrid.appendChild(draggedTask);
+      const taskEl = document.getElementById(draggedTaskId);
+      if (taskEl) {
+        updateTaskDOM(draggedTaskId);
+        timelineGrid.appendChild(taskEl);
+      }
       renderLayout();
-      saveState();
+      await saveTaskToDB(tData);
     }
   };
-
-  document.querySelectorAll('.task').forEach(bindTaskEvents);
 }
 
 function bindTaskEvents(task) {
@@ -1582,90 +1689,103 @@ function bindTaskEvents(task) {
   
   task.onclick = (e) => {
     if (e.target.closest('.task-checkbox') || e.target.closest('.btn-task-action')) return;
-    openViewModal(task);
+    openViewModal(task.id);
   };
 
   task.ondragstart = () => {
     if (isReadOnly) return false;
-    draggedTask = task;
+    draggedTaskId = task.id;
     task.classList.add('dragging');
   };
   task.ondragend = () => {
-    draggedTask = null;
+    draggedTaskId = null;
     task.classList.remove('dragging');
   };
 
   const checkbox = task.querySelector('.task-checkbox');
   checkbox.disabled = isReadOnly;
-  checkbox.onchange = () => {
+  checkbox.onchange = async () => {
     if (isReadOnly) return;
-    task.classList.toggle('done', checkbox.checked);
-    if (checkbox.checked) {
-      checkbox.setAttribute('checked', 'checked');
-    } else {
-      checkbox.removeAttribute('checked');
+    if (tasksData[task.id]) {
+      tasksData[task.id].done = checkbox.checked;
+      await saveTaskToDB(tasksData[task.id]);
     }
-    saveState();
+    task.classList.toggle('done', checkbox.checked);
   };
 
   const editBtn = task.querySelector('.btn-task-action.edit');
   if (editBtn) {
     editBtn.onclick = (e) => {
       e.stopPropagation();
-      openModal('', task);
+      openModal('', task.id);
     };
   }
 
   const cloneBtn = task.querySelector('.btn-task-action.clone');
   if (cloneBtn) {
-    cloneBtn.onclick = (e) => {
+    cloneBtn.onclick = async (e) => {
       e.stopPropagation();
-      duplicateTask(task);
+      await duplicateTask(task.id);
     };
   }
 
   const delBtn = task.querySelector('.btn-task-action.del');
   if (delBtn) {
-    delBtn.onclick = (e) => {
+    delBtn.onclick = async (e) => {
       e.stopPropagation();
+      delete tasksData[task.id];
+      await db.tasks.delete(task.id);
       task.remove();
       renderLayout();
-      saveState();
+      updateStats();
     };
   }
 }
 
-function duplicateTask(originalTask) {
-  if (isReadOnly) return;
+async function duplicateTask(originalTaskId) {
+  if (isReadOnly || !tasksData[originalTaskId]) return;
 
-  const newTask = originalTask.cloneNode(true);
-  newTask.classList.remove('done');
-  const cb = newTask.querySelector('.task-checkbox');
-  cb.checked = false;
-  cb.removeAttribute('checked');
+  const origData = tasksData[originalTaskId];
+  const newId = 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
 
-  bindTaskEvents(newTask);
-  
-  if (originalTask.dataset.start) {
-    let startMin = timeToMinutes(originalTask.dataset.start) + 15;
-    let endMin = timeToMinutes(originalTask.dataset.end || originalTask.dataset.start) + 15;
+  let newStart = '';
+  let newEnd = '';
+
+  if (origData.start) {
+    let startMin = timeToMinutes(origData.start) + 15;
+    let endMin = timeToMinutes(origData.end || origData.start) + 15;
     
     const startH = String(Math.floor(startMin / 60)).padStart(2, '0');
     const startM = String(startMin % 60).padStart(2, '0');
     const endH = String(Math.floor(endMin / 60)).padStart(2, '0');
     const endM = String(endMin % 60).padStart(2, '0');
 
-    newTask.dataset.start = `${startH}:${startM}`;
-    newTask.dataset.end = `${endH}:${endM}`;
-    newTask.querySelector('.task-meta').innerHTML = `<span class="task-time-range">${startH}:${startM} - ${endH}:${endM}</span>${newTask.dataset.notes ? ` <span>• ${newTask.dataset.notes}</span>` : ''}`;
+    newStart = `${startH}:${startM}`;
+    newEnd = `${endH}:${endM}`;
   }
 
-  timelineGrid.appendChild(newTask);
+  const newTaskObj = {
+    id: newId,
+    title: origData.title,
+    start: newStart,
+    end: newEnd,
+    notes: origData.notes,
+    done: false,
+    dateKey: getDateKey()
+  };
+
+  await saveTaskToDB(newTaskObj);
+
+  const newTaskEl = createTaskDOM(newId);
+  if (newTaskEl) {
+    if (newStart) timelineGrid.appendChild(newTaskEl);
+    else backlog.appendChild(newTaskEl);
+  }
+
   renderLayout();
-  saveState();
 }
 
-taskForm.onsubmit = (e) => {
+taskForm.onsubmit = async (e) => {
   e.preventDefault();
   if (isReadOnly) return;
 
@@ -1676,71 +1796,51 @@ taskForm.onsubmit = (e) => {
 
   if (!title) return;
 
-  let timeDisplay = '';
-  if (start && end) {
-    timeDisplay = `${start} - ${end}`;
-  } else if (start) {
-    timeDisplay = start;
-  }
+  if (editingTaskId && tasksData[editingTaskId]) {
+    const data = tasksData[editingTaskId];
+    data.title = title;
+    data.start = start;
+    data.end = end;
+    data.notes = notes;
 
-  if (editingTask) {
-    editingTask.dataset.title = title;
-    editingTask.dataset.start = start;
-    editingTask.dataset.end = end;
-    editingTask.dataset.notes = notes;
+    await saveTaskToDB(data);
+    updateTaskDOM(editingTaskId);
+    const taskEl = document.getElementById(editingTaskId);
 
-    editingTask.querySelector('.task-title').textContent = title;
-    
-    const metaContainer = editingTask.querySelector('.task-meta');
-    metaContainer.innerHTML = `
-      ${timeDisplay ? `<span class="task-time-range">${timeDisplay}</span>` : ''}
-      ${notes ? `<span>• ${notes}</span>` : ''}
-    `;
-
-    if (start) timelineGrid.appendChild(editingTask);
-    else backlog.appendChild(editingTask);
+    if (taskEl) {
+      if (start) timelineGrid.appendChild(taskEl);
+      else backlog.appendChild(taskEl);
+    }
 
   } else {
-    const task = document.createElement('div');
-    task.className = 'task';
-    task.dataset.title = title;
-    task.dataset.start = start;
-    task.dataset.end = end;
-    task.dataset.notes = notes;
+    const newId = 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    const newTaskObj = {
+      id: newId,
+      title: title,
+      start: start,
+      end: end,
+      notes: notes,
+      done: false,
+      dateKey: getDateKey()
+    };
 
-    task.innerHTML = `
-      <input type="checkbox" class="task-checkbox">
-      <div class="task-details">
-        <div class="task-title">${title}</div>
-        <div class="task-meta">
-          ${timeDisplay ? `<span class="task-time-range">${timeDisplay}</span>` : ''}
-          ${notes ? `<span>• ${notes}</span>` : ''}
-        </div>
-      </div>
-      <div class="task-actions">
-        <button class="btn-task-action clone" title="Duplicar">📋</button>
-        <button class="btn-task-action edit" title="Editar">✏️</button>
-        <button class="btn-task-action del" title="Excluir">✕</button>
-      </div>
-    `;
+    await saveTaskToDB(newTaskObj);
 
-    if (start) timelineGrid.appendChild(task);
-    else backlog.appendChild(task);
-    
-    bindTaskEvents(task);
+    const taskEl = createTaskDOM(newId);
+    if (taskEl) {
+      if (start) timelineGrid.appendChild(taskEl);
+      else backlog.appendChild(taskEl);
+    }
   }
 
   closeModal();
   renderLayout();
-  saveState();
 };
 
 function updateStats() {
-  const tasks = [...document.querySelectorAll('.task')];
-  const doneTasks = tasks.filter(t => t.querySelector('.task-checkbox').checked);
-  
-  const total = tasks.length;
-  const done = doneTasks.length;
+  const allTasks = Object.values(tasksData);
+  const total = allTasks.length;
+  const done = allTasks.filter(t => t.done).length;
   const pending = total - done;
   const rate = total > 0 ? Math.round((done / total) * 100) : 0;
 
@@ -1757,12 +1857,13 @@ themeToggle.onclick = () => {
   localStorage.setItem('aura_theme_light', isLight);
 };
 
-document.addEventListener('DOMContentLoaded', updateNotifyButton);
-window.addEventListener('focus', updateNotifyButton);
+document.addEventListener('DOMContentLoaded', async () => {
+  updateNotifyButton();
+  updateDateDisplay();
+  await loadState();
+});
 
-updateDateDisplay();
-updateNotifyButton();
-loadState();
+window.addEventListener('focus', updateNotifyButton);
 </script>
 </body>
 </html>
