@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>AURA OS | AGENDA</title>
+<title>AURA OS | AGENDA SECURE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
-<!-- Biblioteca Dexie.js para gerenciamento simplificado e robusto do IndexedDB -->
+<!-- Biblioteca Dexie.js para gerenciamento do IndexedDB -->
 <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
 
 <style>
@@ -523,6 +523,7 @@ header#appHeader {
   line-height: 1.2;
 }
 
+/* Ajuste do layout meta para exibir horario + nota lado a lado quando houver espaco */
 .task-meta {
   font-size: 10px;
   color: var(--text-muted);
@@ -825,7 +826,7 @@ header#appHeader {
   <div class="brand">
     <div class="logo-title">AURA OS</div>
     <div class="brand-divider"></div>
-    <div class="logo-subtitle">AGENDA</div>
+    <div class="logo-subtitle">AGENDA 🔐</div>
   </div>
   <div class="header-actions">
     <button class="btn-header btn-notify" id="notifyToggle">🔔 Notificações</button>
@@ -952,6 +953,79 @@ header#appHeader {
 
 <script>
 /* ----------------------------------------------------
+   MÓDULO NATIVO DE CRIPTOGRAFIA (Web Crypto API - AES-GCM 256)
+---------------------------------------------------- */
+let cryptoKey = null;
+
+async function getOrCreateCryptoKey() {
+  if (cryptoKey) return cryptoKey;
+
+  let rawKey = localStorage.getItem('aura_crypto_key');
+  if (!rawKey) {
+    const key = await window.crypto.subtle.generateKey(
+      { name: "AES-GCM", length: 256 },
+      true,
+      ["encrypt", "decrypt"]
+    );
+    const exported = await window.crypto.subtle.exportKey("jwk", key);
+    localStorage.setItem('aura_crypto_key', JSON.stringify(exported));
+    cryptoKey = key;
+  } else {
+    const jwk = JSON.parse(rawKey);
+    cryptoKey = await window.crypto.subtle.importKey(
+      "jwk",
+      jwk,
+      { name: "AES-GCM" },
+      true,
+      ["encrypt", "decrypt"]
+    );
+  }
+  return cryptoKey;
+}
+
+async function encryptData(plainText) {
+  if (!plainText) return '';
+  try {
+    const key = await getOrCreateCryptoKey();
+    const encoder = new TextEncoder();
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await window.crypto.subtle.encrypt(
+      { name: "AES-GCM", iv: iv },
+      key,
+      encoder.encode(plainText)
+    );
+
+    const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
+    const cipherHex = Array.from(new Uint8Array(encrypted)).map(b => b.toString(16).padStart(2, '0')).join('');
+    return `${ivHex}:${cipherHex}`;
+  } catch (e) {
+    console.error("Erro ao criptografar:", e);
+    return plainText;
+  }
+}
+
+async function decryptData(cipherText) {
+  if (!cipherText || !cipherText.includes(':')) return cipherText;
+  try {
+    const key = await getOrCreateCryptoKey();
+    const [ivHex, cipherHex] = cipherText.split(':');
+    
+    const iv = new Uint8Array(ivHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+    const cipherBuffer = new Uint8Array(cipherHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))).buffer;
+
+    const decrypted = await window.crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: iv },
+      key,
+      cipherBuffer
+    );
+    return new TextDecoder().decode(decrypted);
+  } catch (e) {
+    // Se falhar (ex: dado salvo antes da criptografia), retorna o texto original
+    return cipherText;
+  }
+}
+
+/* ----------------------------------------------------
    CONFIGURAÇÃO DO BANCO DE DADOS LOCAL (IndexedDB via Dexie)
 ---------------------------------------------------- */
 const db = new Dexie("AuraOSDatabase");
@@ -996,7 +1070,6 @@ let editingTaskId = null;
 let activeViewTaskId = null;
 let notifiedTasks = new Set();
 
-/* BANCO DE DADOS EM MEMÓRIA SINCRO COM INDEXEDDB */
 let tasksData = {};
 
 function normalizeTimeString(timeStr) {
@@ -1457,7 +1530,7 @@ viewDeleteBtn.onclick = async () => {
     if (taskEl) taskEl.remove();
     
     delete tasksData[idToDelete];
-    await db.tasks.delete(idToDelete); // Remove do IndexedDB
+    await db.tasks.delete(idToDelete);
     
     closeViewModal();
     renderLayout();
@@ -1486,7 +1559,7 @@ function createTaskDOM(id) {
 
   const titleEl = document.createElement('div');
   titleEl.className = 'task-title';
-  titleEl.textContent = data.title; // ✅ Seguro contra XSS
+  titleEl.textContent = data.title;
 
   const metaEl = document.createElement('div');
   metaEl.className = 'task-meta';
@@ -1506,7 +1579,7 @@ function createTaskDOM(id) {
 
   if (data.notes) {
     const notesSpan = document.createElement('span');
-    notesSpan.textContent = ` • ${data.notes}`; // ✅ Seguro contra XSS
+    notesSpan.textContent = ` • ${data.notes}`;
     metaEl.appendChild(notesSpan);
   }
 
@@ -1581,12 +1654,24 @@ function updateTaskDOM(id) {
   if (cb) cb.checked = !!data.done;
 }
 
-/* SALVA E ATUALIZA DADOS NO INDEXEDDB */
+/* SALVA E ATUALIZA DADOS CRIPTOGRAFADOS NO INDEXEDDB */
 async function saveTaskToDB(taskObj) {
   if (isReadOnly) return;
-  taskObj.dateKey = getDateKey();
-  tasksData[taskObj.id] = taskObj;
-  await db.tasks.put(taskObj);
+  
+  tasksData[taskObj.id] = { ...taskObj };
+
+  // Criptografa o Título e as Notas antes de mandar para o banco
+  const encryptedTitle = await encryptData(taskObj.title);
+  const encryptedNotes = await encryptData(taskObj.notes);
+
+  const recordToStore = {
+    ...taskObj,
+    title: encryptedTitle,
+    notes: encryptedNotes,
+    dateKey: getDateKey()
+  };
+
+  await db.tasks.put(recordToStore);
   updateStats();
 }
 
@@ -1602,18 +1687,27 @@ async function loadState() {
   }
 
   const dateKey = getDateKey();
-  
-  // Muta para carregar do IndexedDB via Dexie
   const tasksFromDB = await db.tasks.where('dateKey').equals(dateKey).toArray();
 
-  tasksFromDB.forEach(data => {
-    tasksData[data.id] = data;
-    const el = createTaskDOM(data.id);
+  for (const rawData of tasksFromDB) {
+    // Descriptografa Título e Notas em tempo de execução
+    const decryptedTitle = await decryptData(rawData.title);
+    const decryptedNotes = await decryptData(rawData.notes);
+
+    const decryptedTask = {
+      ...rawData,
+      title: decryptedTitle,
+      notes: decryptedNotes
+    };
+
+    tasksData[rawData.id] = decryptedTask;
+
+    const el = createTaskDOM(rawData.id);
     if (el) {
-      if (data.start) timelineGrid.appendChild(el);
+      if (rawData.start) timelineGrid.appendChild(el);
       else backlog.appendChild(el);
     }
-  });
+  }
 
   bindEvents();
   renderLayout();
@@ -1858,6 +1952,7 @@ themeToggle.onclick = () => {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await getOrCreateCryptoKey();
   updateNotifyButton();
   updateDateDisplay();
   await loadState();
