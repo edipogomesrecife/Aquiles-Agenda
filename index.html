@@ -1058,13 +1058,6 @@ header#appHeader {
 
 <script>
 /* ----------------------------------------------------
-   CONFIGURAÇÃO DA API DO AQUILES (GEMINI API)
----------------------------------------------------- */
-// Para conectar a API oficial e gratuita da Google Gemini:
-// Insira sua chave no campo abaixo: 'AIzaSy...'
-const GEMINI_API_KEY = ""; 
-
-/* ----------------------------------------------------
    MÓDULO NATIVO DE CRIPTOGRAFIA (Web Crypto API - AES-GCM 256)
 ---------------------------------------------------- */
 let cryptoKey = null;
@@ -2060,7 +2053,7 @@ themeToggle.onclick = () => {
 };
 
 /* ----------------------------------------------------
-   SISTEMA INTEGRADO DO AGENTE AQUILES (IA)
+   SISTEMA INTEGRADO DO AGENTE AQUILES VIA BACKEND PYTHON
 ---------------------------------------------------- */
 const toggleAquilesBtn = document.getElementById('toggleAquilesBtn');
 const aquilesChatBox = document.getElementById('aquilesChatBox');
@@ -2075,12 +2068,12 @@ closeAquilesChat.onclick = () => aquilesChatBox.classList.remove('active');
 function appendMessage(sender, text) {
   const msgDiv = document.createElement('div');
   msgDiv.className = `chat-msg ${sender}`;
-  msgDiv.innerHTML = text;
+  msgDiv.innerHTML = text.replace(/\n/g, '<br>');
   chatMessages.appendChild(msgDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Busca e descriptografa todas as tarefas salvas para o Aquiles analisar
+// Descriptografa todas as tarefas para enviar o contexto completo de agenda ao Aquiles
 async function getAllDecryptedTasksForAquiles() {
   const allRaw = await db.tasks.toArray();
   const decryptedList = [];
@@ -2108,96 +2101,39 @@ async function handleAquilesQuery(userText) {
 
   const loadingDiv = document.createElement('div');
   loadingDiv.className = 'chat-msg aquiles';
-  loadingDiv.textContent = 'Aquiles está analisando seus dados...';
+  loadingDiv.textContent = 'Aquiles está pensando...';
   chatMessages.appendChild(loadingDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
   const tarefasContexto = await getAllDecryptedTasksForAquiles();
   const hojeYMD = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
 
-  // Se houver uma chave da API do Gemini cadastrada:
-  if (GEMINI_API_KEY) {
-    try {
-      const prompt = `
-      Você é o Aquiles, o assistente pessoal inteligente do sistema AURA OS.
-      Data de hoje selecionada na tela: ${hojeYMD}.
-      
-      Aqui estão TODAS as tarefas salvas no banco de dados do usuário em formato JSON:
-      ${JSON.stringify(tarefasContexto, null, 2)}
+  try {
+    const response = await fetch('http://localhost:5000/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        message: userText,
+        context: {
+          current_date: hojeYMD,
+          tasks: tarefasContexto
+        }
+      })
+    });
 
-      Mensagem do Usuário: "${userText}"
-
-      Regras de resposta:
-      1. Se o usuário perguntar por tarefas, verifique as datas e horários no JSON fornecido e responda com clareza.
-      2. Seja prestativo, direto e use um tom amigável, confiante e profissional.
-      3. Responda em português do Brasil.
-      `;
-
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      });
-
-      const data = await response.json();
-      loadingDiv.remove();
-
-      if (data.candidates && data.candidates[0].content.parts[0].text) {
-        appendMessage('aquiles', data.candidates[0].content.parts[0].text);
-      } else {
-        appendMessage('aquiles', 'Desculpe, não consegui processar a resposta no momento.');
-      }
-      return;
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
-  // --- MODO SIMULAÇÃO LOCAL (Funcionamento automático se não houver chave API) ---
-  setTimeout(async () => {
+    const data = await response.json();
     loadingDiv.remove();
-    const query = userText.toLowerCase();
 
-    // 1. Simulação: Busca de tarefas de hoje ou de uma data
-    if (query.includes('hoje') || query.includes('tarefa') || query.includes('tenho') || query.includes('marcado')) {
-      const tarefasHoje = tarefasContexto.filter(t => t.data === hojeYMD);
-
-      if (tarefasHoje.length === 0) {
-        appendMessage('aquiles', `Analysei sua agenda: você **não possui nenhuma tarefa** cadastrada para o dia de hoje (${hojeYMD}).`);
-      } else {
-        let resp = `Encontrei **${tarefasHoje.length} tarefa(s)** para hoje (${hojeYMD}):<br><br>`;
-        tarefasHoje.forEach(t => {
-          const status = t.concluida ? '✅' : '⏳';
-          resp += `${status} <b>${t.titulo}</b> (${t.inicio}${t.fim ? ' - ' + t.fim : ''})<br>`;
-        });
-        appendMessage('aquiles', resp);
-      }
-      return;
+    if (data.reply) {
+      appendMessage('aquiles', data.reply);
+    } else {
+      appendMessage('aquiles', 'Ocorreu um erro ao processar a resposta no servidor Python.');
     }
-
-    // 2. Simulação: Comando para criar tarefa rápido via chat (ex: "criar tarefa reunião às 14:00")
-    if (query.includes('criar') || query.includes('agendar') || query.includes('marca')) {
-      const newId = 'task_' + Date.now();
-      const newTask = {
-        id: newId,
-        title: userText.replace(/criar|agendar|marca|tarefa/gi, '').trim() || 'Nova Tarefa via Aquiles',
-        start: '12:00',
-        end: '12:30',
-        notes: 'Criado automaticamente pelo Aquiles',
-        done: false,
-        dateKey: getDateKey()
-      };
-
-      await saveTaskToDB(newTask);
-      await loadState();
-
-      appendMessage('aquiles', `🛡️ Prontinho! Criei a tarefa <b>"${newTask.title}"</b> para você na agenda de hoje.`);
-      return;
-    }
-
-    // Resposta padrão caso a pergunta seja geral
-    appendMessage('aquiles', `Recebi sua mensagem: "<i>${userText}</i>". <br><br>Consigo ler todos os seus dados criptografados em tempo real! Tente perguntar: <b>"O que tenho pra hoje?"</b> ou peça <b>"Criar tarefa Reunião"</b>.`);
-  }, 800);
+  } catch (err) {
+    console.error(err);
+    loadingDiv.remove();
+    appendMessage('aquiles', 'Não foi possível se conectar ao servidor Python (localhost:5000). Certifique-se de que ele está rodando!');
+  }
 }
 
 sendChatBtn.onclick = () => {
