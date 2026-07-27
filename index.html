@@ -2124,11 +2124,30 @@ async function handleAquilesQuery(userText) {
     const data = await response.json();
     loadingDiv.remove();
 
-    if (data.reply) {
-      appendMessage('aquiles', data.reply);
-    } else {
-      appendMessage('aquiles', 'Ocorreu um erro ao processar a resposta no servidor Python.');
+    // Se o Python indicar a intenção de criar uma tarefa
+    if (data.action === "CREATE_TASK") {
+      const newId = 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+      const newTaskObj = {
+        id: newId,
+        title: data.title || 'Nova Tarefa',
+        start: normalizeTimeString(data.start || ''),
+        end: normalizeTimeString(data.end || ''),
+        notes: data.notes || '',
+        done: false,
+        dateKey: getDateKey()
+      };
+
+      await saveTaskToDB(newTaskObj);
+
+      const taskEl = createTaskDOM(newId);
+      if (taskEl) {
+        if (newTaskObj.start) timelineGrid.appendChild(taskEl);
+        else backlog.appendChild(taskEl);
+      }
+      renderLayout();
     }
+
+    appendMessage('aquiles', data.reply || 'Processado com sucesso!');
   } catch (err) {
     console.error(err);
     loadingDiv.remove();
