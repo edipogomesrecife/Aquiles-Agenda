@@ -8,7 +8,7 @@ from google.genai import types
 app = Flask(__name__)
 CORS(app)  # Permite que o index.html converse com o Python
 
-# Lê a API Key que você cadastrou nas Environment Variables do Render
+# Lê a API Key cadastrada nas Environment Variables do Render
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
@@ -48,7 +48,8 @@ Tarefas Atuais: {context.get('tasks')}
     contents = []
     for item in history_data:
         role = item.get('role')  # 'user' ou 'model'
-        parts_text = item.get('parts', '')
+        # Aceita tanto 'parts' quanto 'text' enviado pelo frontend
+        parts_text = item.get('parts') or item.get('text', '')
         if role and parts_text:
             contents.append(
                 types.Content(
@@ -67,7 +68,7 @@ Tarefas Atuais: {context.get('tasks')}
 
     try:
         response = client.models.generate_content(
-            model="gemini-3.1-flash-lite",
+            model="gemini-2.5-flash",
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
