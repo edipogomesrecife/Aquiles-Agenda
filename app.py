@@ -1,3 +1,4 @@
+import os
 import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -5,10 +6,11 @@ from google import genai
 from google.genai import types
 
 app = Flask(__name__)
-CORS(app)  # Permite que o index.html converse com o Python
+CORS(app)  # Permite que o index.html converse com o Python[cite: 1]
 
-# Configure sua API Key do Gemini aqui
-client = genai.Client(api_key="AQ.Ab8RN6K5kPO6QuarGFKsXo8Ec4ZTOrjfsv2t2xQhQbSVjZcDxw")
+# Lê a API Key que você cadastrou nas Environment Variables do Render
+api_key = os.getenv("GEMINI_API_KEY")
+client = genai.Client(api_key=api_key)
 
 SYSTEM_INSTRUCTION = """Você é o Aquiles, assistente do AURA OS.
 Se o usuário solicitar a criação de uma tarefa, responda estritamente em formato JSON válido com os seguintes campos:
@@ -42,7 +44,7 @@ Tarefas Atuais: {context.get('tasks')}
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.1-flash-lite",
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
@@ -54,5 +56,5 @@ Tarefas Atuais: {context.get('tasks')}
         return jsonify({"action": "CHAT", "reply": f"Erro no servidor: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    print("🚀 Servidor do Aquiles rodando em http://localhost:5000")
+    print("🚀 Servidor do Aquiles rodando...")
     app.run(port=5000, debug=True)
