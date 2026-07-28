@@ -6,7 +6,7 @@ from google import genai
 from google.genai import types
 
 app = Flask(__name__)
-CORS(app)  # Permite que o index.html converse com o Python[cite: 1]
+CORS(app)  # Permite que o index.html converse com o Python
 
 # Lê a API Key que você cadastrou nas Environment Variables do Render
 api_key = os.getenv("GEMINI_API_KEY")
@@ -34,18 +34,41 @@ def chat_endpoint():
     data = request.json or {}
     user_message = data.get('message', '')
     context = data.get('context', {})
-    
-    prompt = f"""[CONTEXTO DA AGENDA]
+    history_data = data.get('history', [])  # Histórico vindo do frontend
+
+    # Monta a mensagem atual incorporando o contexto da agenda
+    current_prompt = f"""[CONTEXTO DA AGENDA]
 Data Hoje: {context.get('current_date')}
 Tarefas Atuais: {context.get('tasks')}
 
 [MENSAGEM DO USUÁRIO]
 {user_message}"""
 
+    # Converte o histórico recebido para os objetos types.Content da SDK
+    contents = []
+    for item in history_data:
+        role = item.get('role')  # 'user' ou 'model'
+        parts_text = item.get('parts', '')
+        if role and parts_text:
+            contents.append(
+                types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=parts_text)]
+                )
+            )
+
+    # Adiciona a mensagem atual no final da lista de conteúdos
+    contents.append(
+        types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=current_prompt)]
+        )
+    )
+
     try:
         response = client.models.generate_content(
             model="gemini-3.1-flash-lite",
-            contents=prompt,
+            contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
                 response_mime_type="application/json"
