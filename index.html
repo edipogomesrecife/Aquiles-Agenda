@@ -2102,10 +2102,10 @@ async function handleAquilesQuery(userText) {
   appendMessage('user', userText);
   chatInput.value = '';
 
-  // 2. Incluir a Mensagem Atual do Usuário no Histórico no formato da SDK Gemini
+  // 2. Inclui a mensagem atual no histórico simplificado
   aquilesHistory.push({
     role: 'user',
-    parts: [{ text: userText }]
+    text: userText
   });
 
   const loadingDiv = document.createElement('div');
@@ -2118,7 +2118,7 @@ async function handleAquilesQuery(userText) {
   const hojeYMD = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
 
   try {
-    // 3. Enviar o Histórico Atualizado na Requisição fetch
+    // 3. Envia a lista simplificada de histórico para o backend
     const response = await fetch('https://aquiles-agenda.onrender.com/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2139,11 +2139,12 @@ async function handleAquilesQuery(userText) {
     const data = await response.json();
     loadingDiv.remove();
 
-    // 4. Registrar a Resposta da IA no Histórico caso o retorno seja de sucesso
-    const respostaIA = data.reply || 'Processado com sucesso!';
+    // Extrai o texto retornado e armazena no histórico local
+    const respostaIA = typeof data === 'string' ? data : (data.reply || JSON.stringify(data));
+    
     aquilesHistory.push({
       role: 'model',
-      parts: [{ text: respostaIA }]
+      text: respostaIA
     });
 
     // Se o Python indicar a intenção de criar uma tarefa
@@ -2175,7 +2176,7 @@ async function handleAquilesQuery(userText) {
     console.error(err);
     loadingDiv.remove();
 
-    // 5. Tratamento de Erros: Remover a última mensagem para manter o histórico sincrono
+    // Remove a mensagem não entregue para não corromper a sequência de mensagens
     aquilesHistory.pop();
 
     appendMessage('aquiles', 'Não foi possível se conectar ao servidor Python. Certifique-se de que ele está ativo!');
