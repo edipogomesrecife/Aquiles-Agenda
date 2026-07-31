@@ -1175,6 +1175,44 @@ let activeViewTaskId = null;
 let notifiedTasks = new Set();
 
 let tasksData = {};
+let actionHistory = [];
+
+function recordAction(action) {
+  actionHistory.push(action);
+  if (actionHistory.length > 30) actionHistory.shift();
+}
+
+async function undoLastAction() {
+  if (actionHistory.length === 0) return;
+  const lastAction = actionHistory.pop();
+
+  if (lastAction.type === 'DELETE') {
+    tasksData[lastAction.task.id] = lastAction.task;
+    await saveTaskToDB(lastAction.task, lastAction.task.dateKey);
+    const el = createTaskDOM(lastAction.task.id);
+    if (el) {
+      if (lastAction.task.start) timelineGrid.appendChild(el);
+      else backlog.appendChild(el);
+    }
+  } else if (lastAction.type === 'UPDATE') {
+    tasksData[lastAction.oldTask.id] = lastAction.oldTask;
+    await saveTaskToDB(lastAction.oldTask, lastAction.oldTask.dateKey);
+    const taskEl = document.getElementById(lastAction.oldTask.id);
+    if (taskEl) {
+      updateTaskDOM(lastAction.oldTask.id);
+      if (lastAction.oldTask.start) timelineGrid.appendChild(taskEl);
+      else backlog.appendChild(taskEl);
+    }
+  } else if (lastAction.type === 'CREATE') {
+    delete tasksData[lastAction.taskId];
+    await db.tasks.delete(lastAction.taskId);
+    const taskEl = document.getElementById(lastAction.taskId);
+    if (taskEl) taskEl.remove();
+  }
+
+  renderLayout();
+  updateStats();
+}
 
 function normalizeTimeString(timeStr) {
   if (!timeStr) return '';
@@ -1536,6 +1574,7 @@ function openModal(defaultStart = '', taskIdToEdit = null) {
   }
 
   taskModal.classList.add('active');
+  setTimeout(() => document.getElementById('taskTitleInput').focus(), 50);
 }
 
 function closeModal() {
@@ -1630,12 +1669,14 @@ viewDeleteBtn.onclick = async () => {
   if (!activeViewTaskId || isReadOnly) return;
   if (confirm('Deseja realmente excluir esta tarefa?')) {
     const idToDelete = activeViewTaskId;
+    const oldTask = { ...tasksData[idToDelete] };
     const taskEl = document.getElementById(idToDelete);
     if (taskEl) taskEl.remove();
     
     delete tasksData[idToDelete];
     await db.tasks.delete(idToDelete);
-    
+    recordAction({ type: 'DELETE', task: oldTask });
+
     closeViewModal();
     renderLayout();
     updateStats();
@@ -1786,6 +1827,9 @@ async function loadState() {
   if (savedTheme === 'true') {
     document.body.classList.add('light-theme');
     themeToggle.textContent = '🌙 Tema';
+  } else {
+    document.body.classList.remove('light-theme');
+    themeToggle.textContent = '☀️ Tema';
   }
 
   const dateKey = getDateKey();
@@ -1827,6 +1871,7 @@ function bindEvents() {
     e.preventDefault();
     backlog.classList.remove('drag-over');
     if (draggedTaskId && tasksData[draggedTaskId]) {
+      const oldTask = { ...tasksData[draggedTaskId] };
       tasksData[draggedTaskId].start = '';
       tasksData[draggedTaskId].end = '';
       
@@ -1837,6 +1882,7 @@ function bindEvents() {
       }
       renderLayout();
       await saveTaskToDB(tasksData[draggedTaskId]);
+      recordAction({ type: 'UPDATE', oldTask });
     }
   };
 
@@ -1847,6 +1893,7 @@ function bindEvents() {
     if (isReadOnly) return;
     e.preventDefault();
     if (draggedTaskId && tasksData[draggedTaskId]) {
+      const oldTask = { ...tasksData[draggedTaskId] };
       const rect = timelineGrid.getBoundingClientRect();
       const offsetY = e.clientY - rect.top;
       const minutesTotal = Math.max(0, Math.min(23 * 60 + 45, Math.floor((offsetY / HOUR_HEIGHT) * 4) * 15));
@@ -1875,6 +1922,7 @@ function bindEvents() {
       }
       renderLayout();
       await saveTaskToDB(tData);
+      recordAction({ type: 'UPDATE', oldTask });
     }
   };
 }
@@ -1902,8 +1950,10 @@ function bindTaskEvents(task) {
   checkbox.onchange = async () => {
     if (isReadOnly) return;
     if (tasksData[task.id]) {
+      const oldTask = { ...tasksData[task.id] };
       tasksData[task.id].done = checkbox.checked;
       await saveTaskToDB(tasksData[task.id]);
+      recordAction({ type: 'UPDATE', oldTask });
     }
     task.classList.toggle('done', checkbox.checked);
   };
@@ -1928,9 +1978,11 @@ function bindTaskEvents(task) {
   if (delBtn) {
     delBtn.onclick = async (e) => {
       e.stopPropagation();
+      const oldTask = { ...tasksData[task.id] };
       delete tasksData[task.id];
       await db.tasks.delete(task.id);
       task.remove();
+      recordAction({ type: 'DELETE', task: oldTask });
       renderLayout();
       updateStats();
     };
@@ -1977,6 +2029,7 @@ async function duplicateTask(originalTaskId) {
     else backlog.appendChild(newTaskEl);
   }
 
+  recordAction({ type: 'CREATE', taskId: newId });
   renderLayout();
 }
 
@@ -1992,6 +2045,7 @@ taskForm.onsubmit = async (e) => {
   if (!title) return;
 
   if (editingTaskId && tasksData[editingTaskId]) {
+    const oldTask = { ...tasksData[editingTaskId] };
     const data = tasksData[editingTaskId];
     data.title = title;
     data.start = start;
@@ -2006,6 +2060,7 @@ taskForm.onsubmit = async (e) => {
       if (start) timelineGrid.appendChild(taskEl);
       else backlog.appendChild(taskEl);
     }
+    recordAction({ type: 'UPDATE', oldTask });
 
   } else {
     const newId = 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -2026,6 +2081,7 @@ taskForm.onsubmit = async (e) => {
       if (start) timelineGrid.appendChild(taskEl);
       else backlog.appendChild(taskEl);
     }
+    recordAction({ type: 'CREATE', taskId: newId });
   }
 
   closeModal();
@@ -2033,7 +2089,6 @@ taskForm.onsubmit = async (e) => {
 };
 
 function updateStats() {
-  // Considera apenas as tarefas que têm horário de início (timeline)
   const timelineTasks = Object.values(tasksData).filter(t => t.start && t.start.trim() !== '');
   
   const total = timelineTasks.length;
@@ -2047,12 +2102,14 @@ function updateStats() {
   document.getElementById('statRate').textContent = rate + '%';
 }
 
-themeToggle.onclick = () => {
+function toggleTheme() {
   document.body.classList.toggle('light-theme');
   const isLight = document.body.classList.contains('light-theme');
   themeToggle.textContent = isLight ? '🌙 Tema' : '☀️ Tema';
   localStorage.setItem('aura_theme_light', isLight);
-};
+}
+
+themeToggle.onclick = toggleTheme;
 
 /* ----------------------------------------------------
    SISTEMA INTEGRADO DO AGENTE AQUILES VIA BACKEND PYTHON
@@ -2066,7 +2123,12 @@ const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
 const sendChatBtn = document.getElementById('sendChatBtn');
 
-toggleAquilesBtn.onclick = () => aquilesChatBox.classList.toggle('active');
+toggleAquilesBtn.onclick = () => {
+  aquilesChatBox.classList.toggle('active');
+  if (aquilesChatBox.classList.contains('active')) {
+    chatInput.focus();
+  }
+};
 closeAquilesChat.onclick = () => aquilesChatBox.classList.remove('active');
 
 function appendMessage(sender, text) {
@@ -2163,6 +2225,7 @@ async function handleAquilesQuery(userText) {
         if (newTaskObj.start) timelineGrid.appendChild(taskEl);
         else backlog.appendChild(taskEl);
       }
+      recordAction({ type: 'CREATE', taskId: newId });
       renderLayout();
     }
 
@@ -2189,6 +2252,96 @@ chatInput.onkeypress = (e) => {
     if (text) handleAquilesQuery(text);
   }
 };
+
+/* ----------------------------------------------------
+   GERENCIADOR DE ATALHOS DE TECLADO
+---------------------------------------------------- */
+document.addEventListener('keydown', (e) => {
+  const activeElement = document.activeElement;
+  const isInputActive = activeElement && (
+    activeElement.tagName === 'INPUT' ||
+    activeElement.tagName === 'TEXTAREA' ||
+    activeElement.isContentEditable
+  );
+
+  // Esc para fechar qualquer modal ou chat ativo
+  if (e.key === 'Escape') {
+    if (taskModal.classList.contains('active')) {
+      closeModal();
+    } else if (viewTaskModal.classList.contains('active')) {
+      closeViewModal();
+    } else if (aquilesChatBox.classList.contains('active')) {
+      aquilesChatBox.classList.remove('active');
+    }
+    return;
+  }
+
+  // Comportamento do Enter dentro do modal de tarefas
+  if (e.key === 'Enter' && taskModal.classList.contains('active')) {
+    if (activeElement.id === 'taskNotesInput') {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        taskForm.requestSubmit();
+      }
+    } else if (isInputActive) {
+      e.preventDefault();
+      taskForm.requestSubmit();
+    }
+    return;
+  }
+
+  // Ctrl + Z para desfazer
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    if (!isInputActive) {
+      e.preventDefault();
+      undoLastAction();
+    }
+    return;
+  }
+
+  // Se o usuário estiver num campo de texto, ignora atalhos de tecla única/setas
+  if (isInputActive) return;
+
+  // Atalhos Globais de Tecla Única e Navegação
+  switch (e.key) {
+    case 'n':
+    case 'N':
+      e.preventDefault();
+      openModal('');
+      break;
+
+    case 'a':
+    case 'A':
+      e.preventDefault();
+      aquilesChatBox.classList.toggle('active');
+      if (aquilesChatBox.classList.contains('active')) {
+        chatInput.focus();
+      }
+      break;
+
+    case 'c':
+    case 'C':
+      e.preventDefault();
+      btnCalendar.click();
+      break;
+
+    case 't':
+    case 'T':
+      e.preventDefault();
+      toggleTheme();
+      break;
+
+    case 'ArrowLeft':
+      e.preventDefault();
+      btnPrevDay.click();
+      break;
+
+    case 'ArrowRight':
+      e.preventDefault();
+      btnNextDay.click();
+      break;
+  }
+});
 
 document.addEventListener('DOMContentLoaded', async () => {
   await getOrCreateCryptoKey();
