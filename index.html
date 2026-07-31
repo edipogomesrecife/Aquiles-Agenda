@@ -2033,9 +2033,11 @@ taskForm.onsubmit = async (e) => {
 };
 
 function updateStats() {
-  const allTasks = Object.values(tasksData);
-  const total = allTasks.length;
-  const done = allTasks.filter(t => t.done).length;
+  // Considera apenas as tarefas que têm horário de início (timeline)
+  const timelineTasks = Object.values(tasksData).filter(t => t.start && t.start.trim() !== '');
+  
+  const total = timelineTasks.length;
+  const done = timelineTasks.filter(t => t.done).length;
   const pending = total - done;
   const rate = total > 0 ? Math.round((done / total) * 100) : 0;
 
@@ -2055,7 +2057,6 @@ themeToggle.onclick = () => {
 /* ----------------------------------------------------
    SISTEMA INTEGRADO DO AGENTE AQUILES VIA BACKEND PYTHON
 ---------------------------------------------------- */
-// 1. Variável global do histórico de conversa do Aquiles
 let aquilesHistory = [];
 
 const toggleAquilesBtn = document.getElementById('toggleAquilesBtn');
@@ -2076,7 +2077,6 @@ function appendMessage(sender, text) {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Descriptografa todas as tarefas para enviar o contexto completo de agenda ao Aquiles
 async function getAllDecryptedTasksForAquiles() {
   const allRaw = await db.tasks.toArray();
   const decryptedList = [];
@@ -2102,7 +2102,6 @@ async function handleAquilesQuery(userText) {
   appendMessage('user', userText);
   chatInput.value = '';
 
-  // 2. Inclui a mensagem atual no histórico simplificado
   aquilesHistory.push({
     role: 'user',
     text: userText
@@ -2118,7 +2117,6 @@ async function handleAquilesQuery(userText) {
   const hojeYMD = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
 
   try {
-    // 3. Envia a lista simplificada de histórico para o backend
     const response = await fetch('https://aquiles-agenda.onrender.com/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2139,7 +2137,6 @@ async function handleAquilesQuery(userText) {
     const data = await response.json();
     loadingDiv.remove();
 
-    // Extrai o texto retornado e armazena no histórico local
     const respostaIA = typeof data === 'string' ? data : (data.reply || JSON.stringify(data));
     
     aquilesHistory.push({
@@ -2147,7 +2144,6 @@ async function handleAquilesQuery(userText) {
       text: respostaIA
     });
 
-    // Se o Python indicar a intenção de criar uma tarefa
     if (data.action === "CREATE_TASK") {
       const newId = 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
       const newTaskObj = {
@@ -2176,7 +2172,6 @@ async function handleAquilesQuery(userText) {
     console.error(err);
     loadingDiv.remove();
 
-    // Remove a mensagem não entregue para não corromper a sequência de mensagens
     aquilesHistory.pop();
 
     appendMessage('aquiles', 'Não foi possível se conectar ao servidor Python. Certifique-se de que ele está ativo!');
