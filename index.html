@@ -28,16 +28,19 @@
   --hour-height: 140px;
 }
 
+/* TEMA CLARO INSPIRADO NO GEMINI (SUAVE E CONFORTÁVEL) */
 .light-theme {
-  --bg: #f4f5f8;
+  --bg: #f8f9fa;
   --surface: #ffffff;
-  --surface-border: #e2e8f0;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
+  --surface-border: #e9ecef;
+  --text-main: #1f2937;
+  --text-muted: #6b7280;
   --accent-gold: #d97706;
   --accent-gold-hover: #b45309;
-  --done-bg: #f1f5f9;
-  --done-text: #94a3b8;
+  --done-bg: #f3f4f6;
+  --done-text: #9ca3af;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -446,7 +449,11 @@ header#appHeader {
   box-sizing: border-box;
 }
 
-.light-theme .task { background: #ffffff; }
+.light-theme .task { 
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
 .task:hover { border-color: var(--accent-gold); z-index: 20; }
 .task.dragging { opacity: 0.4; cursor: grabbing; }
 
@@ -535,6 +542,10 @@ header#appHeader {
   border-radius: 4px;
 }
 
+.light-theme .task-actions {
+  background: rgba(241, 243, 245, 0.9);
+}
+
 @media (min-width: 900px) {
   .task-actions { opacity: 0; transition: all 0.2s; }
   .task:hover .task-actions { opacity: 1; }
@@ -551,6 +562,7 @@ header#appHeader {
 }
 
 .btn-task-action:hover { color: var(--text-main); background: rgba(255,255,255,0.15); }
+.light-theme .btn-task-action:hover { background: rgba(0,0,0,0.05); }
 .btn-task-action.del:hover { color: #ef4444; background: rgba(239, 68, 68, 0.15); }
 
 /* Modais */
@@ -2321,8 +2333,11 @@ document.addEventListener('keydown', (e) => {
 
     case 'c':
     case 'C':
-      e.preventDefault();
-      btnCalendar.click();
+      // Apenas abre o calendário se NÃO for uma combinação com Ctrl ou Cmd (ex: Ctrl+C)
+      if (!e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        btnCalendar.click();
+      }
       break;
 
     case 't':
