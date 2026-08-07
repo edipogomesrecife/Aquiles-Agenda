@@ -1112,44 +1112,47 @@ header#appHeader {
 const SUPABASE_URL = "https://karxnrpowkoloyfuqzvs.supabase.co"; 
 const SUPABASE_ANON_KEY = "sb_publishable_AhLangNb4iit1T_o9_SwYg_CIYsZXHi"; 
 
-// Instância renomeada para 'supabaseClient' para evitar choque com a biblioteca global
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* ----------------------------------------------------
-   MÓDULO NATIVO DE CRIPTOGRAFIA (Web Crypto API - AES-GCM 256)
+   CRIPTOFRAFIA DERIVADA SINCRO (Web Crypto PBKDF2 + AES-GCM)
 ---------------------------------------------------- */
 let cryptoKey = null;
 
-async function getOrCreateCryptoKey() {
+async function getCryptoKeyForUser() {
   if (cryptoKey) return cryptoKey;
 
-  let rawKey = localStorage.getItem('aura_crypto_key');
-  if (!rawKey) {
-    const key = await window.crypto.subtle.generateKey(
-      { name: "AES-GCM", length: 256 },
-      true,
-      ["encrypt", "decrypt"]
-    );
-    const exported = await window.crypto.subtle.exportKey("jwk", key);
-    localStorage.setItem('aura_crypto_key', JSON.stringify(exported));
-    cryptoKey = key;
-  } else {
-    const jwk = JSON.parse(rawKey);
-    cryptoKey = await window.crypto.subtle.importKey(
-      "jwk",
-      jwk,
-      { name: "AES-GCM" },
-      true,
-      ["encrypt", "decrypt"]
-    );
-  }
+  // Usa o ID único do usuário logado no Supabase para garantir a mesma chave em qualquer dispositivo
+  const secret = currentUser ? currentUser.id : "AURA_DEFAULT_PUBLIC_KEY_INIT";
+  const encoder = new TextEncoder();
+  const keyMaterial = await window.crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    "PBKDF2",
+    false,
+    ["deriveKey"]
+  );
+
+  cryptoKey = await window.crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt: encoder.encode("aura_os_salt_secure_2026"),
+      iterations: 100000,
+      hash: "SHA-256"
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+
   return cryptoKey;
 }
 
 async function encryptData(plainText) {
   if (!plainText) return '';
   try {
-    const key = await getOrCreateCryptoKey();
+    const key = await getCryptoKeyForUser();
     const encoder = new TextEncoder();
     const iv = window.crypto.getRandomValues(new Uint8Array(12));
     const encrypted = await window.crypto.subtle.encrypt(
@@ -1170,9 +1173,11 @@ async function encryptData(plainText) {
 async function decryptData(cipherText) {
   if (!cipherText || !cipherText.includes(':')) return cipherText;
   try {
-    const key = await getOrCreateCryptoKey();
+    const key = await getCryptoKeyForUser();
     const [ivHex, cipherHex] = cipherText.split(':');
     
+    if (!ivHex || !cipherHex) return cipherText;
+
     const iv = new Uint8Array(ivHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
     const cipherBuffer = new Uint8Array(cipherHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))).buffer;
 
@@ -1183,7 +1188,8 @@ async function decryptData(cipherText) {
     );
     return new TextDecoder().decode(decrypted);
   } catch (e) {
-    return cipherText;
+    // Evita expor a string criptografada crua se a chave for incompatível com dados antigos
+    return "[Conteúdo Protegido / Incompatível]";
   }
 }
 
@@ -1200,6 +1206,7 @@ let currentUser = null;
 authBtn.onclick = async () => {
   if (currentUser) {
     await supabaseClient.auth.signOut();
+    cryptoKey = null; // Reseta a chave ao sair
     checkAuthStatus();
   } else {
     authModal.classList.add('active');
@@ -1217,6 +1224,7 @@ authForm.onsubmit = async (e) => {
   if (error) {
     alert("Erro no Login: " + error.message);
   } else {
+    cryptoKey = null;
     authModal.classList.remove('active');
     checkAuthStatus();
   }
@@ -1236,6 +1244,7 @@ signUpBtn.onclick = async () => {
     alert("Erro ao cadastrar: " + error.message);
   } else {
     alert("Cadastro concluído! Se a verificação por e-mail estiver ativa, confira sua caixa de entrada.");
+    cryptoKey = null;
     authModal.classList.remove('active');
     checkAuthStatus();
   }
@@ -1250,6 +1259,7 @@ async function checkAuthStatus() {
     currentUser = null;
     authBtn.textContent = '🔑 Entrar';
   }
+  cryptoKey = null; // Força recálculo seguro da chave
   await loadState();
 }
 
@@ -1291,7 +1301,6 @@ let isReadOnly = false;
 let draggedTaskId = null;
 let editingTaskId = null;
 let activeViewTaskId = null;
-let notifiedTasks = new Set();
 
 let tasksData = {};
 let actionHistory = [];
@@ -2304,7 +2313,6 @@ async function handleAquilesQuery(userText) {
     if (data.action === "CREATE_TASK") {
       const newId = 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
       
-      // Validação da data enviada pela IA
       let targetDateKey = getDateKey();
       if (data.date || data.data) {
         targetDateKey = `aura_agenda_${data.date || data.data}`;
@@ -2322,7 +2330,6 @@ async function handleAquilesQuery(userText) {
 
       await saveTaskToDB(newTaskObj, targetDateKey);
 
-      // Só adiciona visualmente se a tarefa pertencer ao dia atual exibido na tela
       if (targetDateKey === getDateKey()) {
         const taskEl = createTaskDOM(newId);
         if (taskEl) {
@@ -2439,7 +2446,6 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await getOrCreateCryptoKey();
   updateNotifyButton();
   updateDateDisplay();
   await checkAuthStatus();
