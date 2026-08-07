@@ -1839,7 +1839,6 @@ async function saveTaskToDB(taskObj, targetDateKey = null) {
   if (!currentUser) return;
 
   const dateKey = targetDateKey || taskObj.dateKey || getDateKey();
-  if (!targetDateKey && isReadOnly) return;
 
   tasksData[taskObj.id] = { ...taskObj, dateKey };
 
@@ -2304,6 +2303,13 @@ async function handleAquilesQuery(userText) {
 
     if (data.action === "CREATE_TASK") {
       const newId = 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+      
+      // Validação da data enviada pela IA
+      let targetDateKey = getDateKey();
+      if (data.date || data.data) {
+        targetDateKey = `aura_agenda_${data.date || data.data}`;
+      }
+
       const newTaskObj = {
         id: newId,
         title: data.title || 'Nova Tarefa',
@@ -2311,18 +2317,21 @@ async function handleAquilesQuery(userText) {
         end: normalizeTimeString(data.end || ''),
         notes: data.notes || '',
         done: false,
-        dateKey: getDateKey()
+        dateKey: targetDateKey
       };
 
-      await saveTaskToDB(newTaskObj);
+      await saveTaskToDB(newTaskObj, targetDateKey);
 
-      const taskEl = createTaskDOM(newId);
-      if (taskEl) {
-        if (newTaskObj.start) timelineGrid.appendChild(taskEl);
-        else backlog.appendChild(taskEl);
+      // Só adiciona visualmente se a tarefa pertencer ao dia atual exibido na tela
+      if (targetDateKey === getDateKey()) {
+        const taskEl = createTaskDOM(newId);
+        if (taskEl) {
+          if (newTaskObj.start) timelineGrid.appendChild(taskEl);
+          else backlog.appendChild(taskEl);
+        }
+        renderLayout();
       }
       recordAction({ type: 'CREATE', taskId: newId });
-      renderLayout();
     }
 
     appendMessage('aquiles', respostaIA);
