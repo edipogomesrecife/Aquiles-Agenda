@@ -57,6 +57,13 @@ body {
   flex-direction: column;
 }
 
+/* Ocultar elementos da aplicação para não autenticados */
+body:not(.authenticated) .dashboard-stats,
+body:not(.authenticated) #wrap,
+body:not(.authenticated) #aquilesWidget {
+  display: none !important;
+}
+
 /* HEADER */
 header#appHeader {
   display: flex;
@@ -1051,12 +1058,9 @@ header#appHeader {
         <input type="password" id="authPasswordConfirm" class="form-input" placeholder="••••••••">
       </div>
 
-      <div class="modal-actions" style="justify-content: space-between;">
-        <button type="button" class="btn-cancel" id="closeAuthModalBtn">Cancelar</button>
-        <div>
-          <button type="button" class="btn-cancel" id="signUpBtn">Cadastrar</button>
-          <button type="submit" class="btn-save" id="submitAuthBtn">Entrar</button>
-        </div>
+      <div class="modal-actions" style="justify-content: flex-end; gap: 8px;">
+        <button type="button" class="btn-cancel" id="signUpBtn">Cadastrar</button>
+        <button type="submit" class="btn-save" id="submitAuthBtn">Entrar</button>
       </div>
     </form>
   </div>
@@ -1242,8 +1246,6 @@ const authModal = document.getElementById('authModal');
 const authBtn = document.getElementById('authBtn');
 const authForm = document.getElementById('authForm');
 const signUpBtn = document.getElementById('signUpBtn');
-const closeAuthModalBtn = document.getElementById('closeAuthModalBtn');
-const labelAuthPassword = document.getElementById('labelAuthPassword');
 let currentUser = null;
 
 // Alterna a interface do Modal para modo Login ou Cadastro
@@ -1267,8 +1269,6 @@ authBtn.onclick = async () => {
     authModal.classList.add('active');
   }
 };
-
-closeAuthModalBtn.onclick = () => authModal.classList.remove('active');
 
 authForm.onsubmit = async (e) => {
   e.preventDefault();
@@ -1334,11 +1334,13 @@ async function checkAuthStatus() {
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (session) {
     currentUser = session.user;
+    document.body.classList.add('authenticated');
     authBtn.textContent = '🚪 Sair';
     authBtn.classList.remove('highlight');
     authModal.classList.remove('active');
   } else {
     currentUser = null;
+    document.body.classList.remove('authenticated');
     authBtn.textContent = '🔑 Entrar';
     authBtn.classList.add('highlight');
     setAuthMode(false); // Modo login por padrão ao abrir
@@ -2464,7 +2466,6 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (taskModal.classList.contains('active')) closeModal();
     else if (viewTaskModal.classList.contains('active')) closeViewModal();
-    else if (authModal.classList.contains('active')) authModal.classList.remove('active');
     else if (aquilesChatBox.classList.contains('active')) aquilesChatBox.classList.remove('active');
     return;
   }
@@ -2501,9 +2502,11 @@ document.addEventListener('keydown', (e) => {
 
     case 'a':
     case 'A':
-      e.preventDefault();
-      aquilesChatBox.classList.toggle('active');
-      if (aquilesChatBox.classList.contains('active')) chatInput.focus();
+      if (currentUser) {
+        e.preventDefault();
+        aquilesChatBox.classList.toggle('active');
+        if (aquilesChatBox.classList.contains('active')) chatInput.focus();
+      }
       break;
 
     case 'c':
