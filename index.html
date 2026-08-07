@@ -637,7 +637,7 @@ header#appHeader {
   margin-bottom: 6px;
 }
 
-.form-input, .form-textarea {
+.form-input, .form-textarea, .form-select {
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--surface-border);
@@ -650,8 +650,12 @@ header#appHeader {
   transition: all 0.2s;
 }
 
+.form-select {
+  cursor: pointer;
+}
+
 .form-input-time { font-family: 'JetBrains Mono', monospace; }
-.form-input:focus, .form-textarea:focus { border-color: var(--accent-gold); }
+.form-input:focus, .form-textarea:focus, .form-select:focus { border-color: var(--accent-gold); }
 
 .form-row {
   display: grid;
@@ -936,6 +940,14 @@ header#appHeader {
   font-weight: 700;
   cursor: pointer;
 }
+
+/* Oculta os campos extras de cadastro quando estiver em modo Login */
+.auth-signup-only {
+  display: block;
+}
+.is-login-mode .auth-signup-only {
+  display: none !important;
+}
 </style>
 </head>
 <body>
@@ -1004,25 +1016,46 @@ header#appHeader {
 
 <datalist id="hoursList"></datalist>
 
-<!-- Modal Auth (Supabase) -->
+<!-- Modal Auth (Supabase com Cadastro Completo) -->
 <div class="modal-overlay" id="authModal">
   <div class="modal">
     <div class="modal-header" id="authModalTitle">Acessar Aquiles OS</div>
     <form id="authForm">
+      
+      <div class="form-group auth-signup-only">
+        <label class="form-label">NOME COMPLETO</label>
+        <input type="text" id="authName" class="form-input" placeholder="Seu nome completo">
+      </div>
+
+      <div class="form-group auth-signup-only">
+        <label class="form-label">GÊNERO</label>
+        <select id="authGender" class="form-select">
+          <option value="" disabled selected>Selecione seu gênero</option>
+          <option value="Masculino">Masculino</option>
+          <option value="Feminino">Feminino</option>
+        </select>
+      </div>
+
       <div class="form-group">
         <label class="form-label">E-MAIL</label>
         <input type="email" id="authEmail" class="form-input" placeholder="seuemail@exemplo.com" required>
       </div>
+
       <div class="form-group">
-        <label class="form-label">SENHA</label>
+        <label class="form-label" id="labelAuthPassword">SENHA</label>
         <input type="password" id="authPassword" class="form-input" placeholder="••••••••" required>
+      </div>
+
+      <div class="form-group auth-signup-only">
+        <label class="form-label">REPETIR SENHA</label>
+        <input type="password" id="authPasswordConfirm" class="form-input" placeholder="••••••••">
       </div>
 
       <div class="modal-actions" style="justify-content: space-between;">
         <button type="button" class="btn-cancel" id="closeAuthModalBtn">Cancelar</button>
         <div>
           <button type="button" class="btn-cancel" id="signUpBtn">Cadastrar</button>
-          <button type="submit" class="btn-save">Entrar</button>
+          <button type="submit" class="btn-save" id="submitAuthBtn">Entrar</button>
         </div>
       </div>
     </form>
@@ -1133,7 +1166,6 @@ let cryptoKey = null;
 async function getCryptoKeyForUser() {
   if (cryptoKey) return cryptoKey;
 
-  // Usa o ID único do usuário logado no Supabase para garantir a mesma chave em qualquer dispositivo
   const secret = currentUser ? currentUser.id : "AURA_DEFAULT_PUBLIC_KEY_INIT";
   const encoder = new TextEncoder();
   const keyMaterial = await window.crypto.subtle.importKey(
@@ -1199,27 +1231,39 @@ async function decryptData(cipherText) {
     );
     return new TextDecoder().decode(decrypted);
   } catch (e) {
-    // Evita expor a string criptografada crua se a chave for incompatível com dados antigos
     return "[Conteúdo Protegido / Incompatível]";
   }
 }
 
 /* ----------------------------------------------------
-   SISTEMA DE AUTENTICAÇÃO COM SUPABASE
+   SISTEMA DE AUTENTICAÇÃO E CADASTRO COM SUPABASE
 ---------------------------------------------------- */
 const authModal = document.getElementById('authModal');
 const authBtn = document.getElementById('authBtn');
 const authForm = document.getElementById('authForm');
 const signUpBtn = document.getElementById('signUpBtn');
 const closeAuthModalBtn = document.getElementById('closeAuthModalBtn');
+const labelAuthPassword = document.getElementById('labelAuthPassword');
 let currentUser = null;
+
+// Alterna a interface do Modal para modo Login ou Cadastro
+function setAuthMode(isSignUp) {
+  if (isSignUp) {
+    authModal.classList.remove('is-login-mode');
+    labelAuthPassword.textContent = 'CRIAR SENHA';
+  } else {
+    authModal.classList.add('is-login-mode');
+    labelAuthPassword.textContent = 'SENHA';
+  }
+}
 
 authBtn.onclick = async () => {
   if (currentUser) {
     await supabaseClient.auth.signOut();
-    cryptoKey = null; // Reseta a chave ao sair
+    cryptoKey = null;
     checkAuthStatus();
   } else {
+    setAuthMode(false);
     authModal.classList.add('active');
   }
 };
@@ -1242,19 +1286,44 @@ authForm.onsubmit = async (e) => {
 };
 
 signUpBtn.onclick = async () => {
-  const email = document.getElementById('authEmail').value;
-  const password = document.getElementById('authPassword').value;
-
-  if (!email || !password) {
-    alert("Preencha o e-mail e a senha para se cadastrar.");
+  // Se o formulário estiver ocultando os campos adicionais (modo login), abre a visualização de cadastro
+  if (authModal.classList.contains('is-login-mode')) {
+    setAuthMode(true);
     return;
   }
 
-  const { data, error } = await supabaseClient.auth.signUp({ email, password });
+  const name = document.getElementById('authName').value.trim();
+  const gender = document.getElementById('authGender').value;
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const passwordConfirm = document.getElementById('authPasswordConfirm').value;
+
+  if (!name || !gender || !email || !password || !passwordConfirm) {
+    alert("Por favor, preencha todos os campos do cadastro (Nome, Gênero, E-mail e Senhas).");
+    return;
+  }
+
+  if (password !== passwordConfirm) {
+    alert("As senhas informadas não coincidem. Digite novamente.");
+    return;
+  }
+
+  // Cadastro com meta-dados (Nome e Gênero)
+  const { data, error } = await supabaseClient.auth.signUp({ 
+    email, 
+    password,
+    options: {
+      data: {
+        full_name: name,
+        gender: gender
+      }
+    }
+  });
+
   if (error) {
     alert("Erro ao cadastrar: " + error.message);
   } else {
-    alert("Cadastro concluído! Se a verificação por e-mail estiver ativa, confira sua caixa de entrada.");
+    alert("Cadastro concluído com sucesso! Se a verificação por e-mail estiver ativa, confira sua caixa de entrada.");
     cryptoKey = null;
     authModal.classList.remove('active');
     checkAuthStatus();
@@ -1272,11 +1341,11 @@ async function checkAuthStatus() {
     currentUser = null;
     authBtn.textContent = '🔑 Entrar';
     authBtn.classList.add('highlight');
-    // Força a exibição do modal de login imediatamente se deslogado
+    setAuthMode(false); // Modo login por padrão ao abrir
     authModal.classList.add('active');
     setTimeout(() => document.getElementById('authEmail').focus(), 100);
   }
-  cryptoKey = null; // Força recálculo seguro da chave
+  cryptoKey = null;
   await loadState();
 }
 
@@ -2388,6 +2457,7 @@ document.addEventListener('keydown', (e) => {
   const isInputActive = activeElement && (
     activeElement.tagName === 'INPUT' ||
     activeElement.tagName === 'TEXTAREA' ||
+    activeElement.tagName === 'SELECT' ||
     activeElement.isContentEditable
   );
 
