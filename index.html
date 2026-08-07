@@ -154,7 +154,7 @@ header#appHeader {
   border: 1px solid var(--surface-border);
   border-radius: 8px;
   box-shadow: var(--shadow-md);
-  min-width: 130px;
+  min-width: 140px;
   z-index: 10000;
   overflow: hidden;
 }
@@ -180,6 +180,11 @@ header#appHeader {
 }
 
 .user-dropdown-item:hover {
+  background: rgba(235, 176, 64, 0.15);
+  color: var(--accent-gold);
+}
+
+.user-dropdown-item.logout-item:hover {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
 }
@@ -702,6 +707,11 @@ header#appHeader {
   transition: all 0.2s;
 }
 
+.form-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .form-select {
   cursor: pointer;
 }
@@ -1014,7 +1024,8 @@ header#appHeader {
     <div class="user-menu-container">
       <button class="btn-header btn-auth" id="authBtn">🔑 Entrar</button>
       <div class="user-dropdown-menu" id="userDropdown">
-        <button class="user-dropdown-item" id="logoutBtn">🚪 Sair</button>
+        <button class="user-dropdown-item" id="myProfileBtn">👤 Meus Dados</button>
+        <button class="user-dropdown-item logout-item" id="logoutBtn">🚪 Sair</button>
       </div>
     </div>
     <button class="btn-header btn-notify" id="notifyToggle">🔔 Notificações</button>
@@ -1112,6 +1123,38 @@ header#appHeader {
         <button type="button" class="btn-cancel auth-signup-only" id="cancelSignUpBtn">Cancelar</button>
         <button type="button" class="btn-cancel" id="signUpBtn">Cadastrar</button>
         <button type="submit" class="btn-save" id="submitAuthBtn">Entrar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Meus Dados (Edição de Perfil) -->
+<div class="modal-overlay" id="profileModal">
+  <div class="modal">
+    <div class="modal-header">Meus Dados</div>
+    <form id="profileForm">
+      <div class="form-group">
+        <label class="form-label">NOME COMPLETO</label>
+        <input type="text" id="profileName" class="form-input" placeholder="Seu nome completo" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">GÊNERO</label>
+        <select id="profileGender" class="form-select" required>
+          <option value="" disabled>Selecione seu gênero</option>
+          <option value="Masculino">Masculino</option>
+          <option value="Feminino">Feminino</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">E-MAIL</label>
+        <input type="email" id="profileEmail" class="form-input" disabled>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" id="closeProfileModalBtn">Cancelar</button>
+        <button type="submit" class="btn-save">Salvar Dados</button>
       </div>
     </form>
   </div>
@@ -1300,6 +1343,10 @@ const signUpBtn = document.getElementById('signUpBtn');
 const cancelSignUpBtn = document.getElementById('cancelSignUpBtn');
 const userDropdown = document.getElementById('userDropdown');
 const logoutBtn = document.getElementById('logoutBtn');
+const myProfileBtn = document.getElementById('myProfileBtn');
+const profileModal = document.getElementById('profileModal');
+const profileForm = document.getElementById('profileForm');
+const closeProfileModalBtn = document.getElementById('closeProfileModalBtn');
 const submitAuthBtn = document.getElementById('submitAuthBtn');
 const labelAuthPassword = document.getElementById('labelAuthPassword');
 
@@ -1343,6 +1390,53 @@ document.addEventListener('click', (e) => {
     userDropdown.classList.remove('active');
   }
 });
+
+/* ABRIR MODAL MEUS DADOS */
+myProfileBtn.onclick = () => {
+  userDropdown.classList.remove('active');
+  if (!currentUser) return;
+
+  const metadata = currentUser.user_metadata || {};
+  document.getElementById('profileName').value = metadata.full_name || '';
+  document.getElementById('profileGender').value = metadata.gender || '';
+  document.getElementById('profileEmail').value = currentUser.email || '';
+
+  profileModal.classList.add('active');
+};
+
+closeProfileModalBtn.onclick = () => {
+  profileModal.classList.remove('active');
+};
+
+profileForm.onsubmit = async (e) => {
+  e.preventDefault();
+  if (!currentUser) return;
+
+  const name = document.getElementById('profileName').value.trim();
+  const gender = document.getElementById('profileGender').value;
+
+  if (!name || !gender) {
+    alert("Por favor, preencha todos os campos.");
+    return;
+  }
+
+  const { data, error } = await supabaseClient.auth.updateUser({
+    data: {
+      full_name: name,
+      gender: gender
+    }
+  });
+
+  if (error) {
+    alert("Erro ao atualizar os dados: " + error.message);
+  } else {
+    currentUser = data.user;
+    const firstName = name.split(' ')[0];
+    authBtn.textContent = `👤 ${firstName} ▾`;
+    alert("Dados atualizados com sucesso!");
+    profileModal.classList.remove('active');
+  }
+};
 
 logoutBtn.onclick = async () => {
   userDropdown.classList.remove('active');
@@ -2552,6 +2646,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (taskModal.classList.contains('active')) closeModal();
     else if (viewTaskModal.classList.contains('active')) closeViewModal();
+    else if (profileModal.classList.contains('active')) profileModal.classList.remove('active');
     else if (aquilesChatBox.classList.contains('active')) aquilesChatBox.classList.remove('active');
     return;
   }
