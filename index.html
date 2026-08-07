@@ -139,6 +139,51 @@ header#appHeader {
   background: var(--accent-gold-hover);
 }
 
+/* Container para Menu Dropdown do Usuário Logado */
+.user-menu-container {
+  position: relative;
+  display: inline-block;
+}
+
+.user-dropdown-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  min-width: 130px;
+  z-index: 10000;
+  overflow: hidden;
+}
+
+.user-dropdown-menu.active {
+  display: block;
+}
+
+.user-dropdown-item {
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.2s;
+}
+
+.user-dropdown-item:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
 /* Animação para destacar o botão de login quando deslogado */
 @keyframes pulseAuth {
   0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(235, 176, 64, 0.4); }
@@ -966,7 +1011,12 @@ header#appHeader {
     <div class="logo-subtitle">AGENDA 🔐</div>
   </div>
   <div class="header-actions">
-    <button class="btn-header btn-auth" id="authBtn">🔑 Entrar</button>
+    <div class="user-menu-container">
+      <button class="btn-header btn-auth" id="authBtn">🔑 Entrar</button>
+      <div class="user-dropdown-menu" id="userDropdown">
+        <button class="user-dropdown-item" id="logoutBtn">🚪 Sair</button>
+      </div>
+    </div>
     <button class="btn-header btn-notify" id="notifyToggle">🔔 Notificações</button>
     <button class="btn-header" id="themeToggle">☀️ Tema</button>
   </div>
@@ -1059,6 +1109,7 @@ header#appHeader {
       </div>
 
       <div class="modal-actions" style="justify-content: flex-end; gap: 8px;">
+        <button type="button" class="btn-cancel auth-signup-only" id="cancelSignUpBtn">Cancelar</button>
         <button type="button" class="btn-cancel" id="signUpBtn">Cadastrar</button>
         <button type="submit" class="btn-save" id="submitAuthBtn">Entrar</button>
       </div>
@@ -1246,6 +1297,12 @@ const authModal = document.getElementById('authModal');
 const authBtn = document.getElementById('authBtn');
 const authForm = document.getElementById('authForm');
 const signUpBtn = document.getElementById('signUpBtn');
+const cancelSignUpBtn = document.getElementById('cancelSignUpBtn');
+const userDropdown = document.getElementById('userDropdown');
+const logoutBtn = document.getElementById('logoutBtn');
+const submitAuthBtn = document.getElementById('submitAuthBtn');
+const labelAuthPassword = document.getElementById('labelAuthPassword');
+
 let currentUser = null;
 
 // Alterna a interface do Modal para modo Login ou Cadastro
@@ -1253,81 +1310,105 @@ function setAuthMode(isSignUp) {
   if (isSignUp) {
     authModal.classList.remove('is-login-mode');
     labelAuthPassword.textContent = 'CRIAR SENHA';
+    signUpBtn.style.display = 'none';
+    submitAuthBtn.textContent = 'Cadastrar';
   } else {
     authModal.classList.add('is-login-mode');
     labelAuthPassword.textContent = 'SENHA';
+    signUpBtn.style.display = 'inline-block';
+    submitAuthBtn.textContent = 'Entrar';
   }
 }
 
+// Botão "Cancelar" na tela de cadastro (volta ao modo login)
+cancelSignUpBtn.onclick = () => {
+  document.getElementById('authName').value = '';
+  document.getElementById('authGender').selectedIndex = 0;
+  document.getElementById('authPasswordConfirm').value = '';
+  setAuthMode(false);
+};
+
 authBtn.onclick = async () => {
   if (currentUser) {
-    await supabaseClient.auth.signOut();
-    cryptoKey = null;
-    checkAuthStatus();
+    userDropdown.classList.toggle('active');
   } else {
     setAuthMode(false);
     authModal.classList.add('active');
   }
 };
 
+// Fecha o dropdown se o usuário clicar fora dele
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.user-menu-container')) {
+    userDropdown.classList.remove('active');
+  }
+});
+
+logoutBtn.onclick = async () => {
+  userDropdown.classList.remove('active');
+  await supabaseClient.auth.signOut();
+  cryptoKey = null;
+  checkAuthStatus();
+};
+
 authForm.onsubmit = async (e) => {
   e.preventDefault();
-  const email = document.getElementById('authEmail').value;
-  const password = document.getElementById('authPassword').value;
 
-  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  if (error) {
-    alert("Erro no Login: " + error.message);
+  const isSignUp = !authModal.classList.contains('is-login-mode');
+
+  if (isSignUp) {
+    const name = document.getElementById('authName').value.trim();
+    const gender = document.getElementById('authGender').value;
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const passwordConfirm = document.getElementById('authPasswordConfirm').value;
+
+    if (!name || !gender || !email || !password || !passwordConfirm) {
+      alert("Por favor, preencha todos os campos do cadastro (Nome, Gênero, E-mail e Senhas).");
+      return;
+    }
+
+    if (password !== passwordConfirm) {
+      alert("As senhas informadas não coincidem. Digite novamente.");
+      return;
+    }
+
+    const { data, error } = await supabaseClient.auth.signUp({ 
+      email, 
+      password,
+      options: {
+        data: {
+          full_name: name,
+          gender: gender
+        }
+      }
+    });
+
+    if (error) {
+      alert("Erro ao cadastrar: " + error.message);
+    } else {
+      alert("Cadastro concluído com sucesso! Se a verificação por e-mail estiver ativa, confira sua caixa de entrada.");
+      cryptoKey = null;
+      authModal.classList.remove('active');
+      checkAuthStatus();
+    }
   } else {
-    cryptoKey = null;
-    authModal.classList.remove('active');
-    checkAuthStatus();
+    const email = document.getElementById('authEmail').value;
+    const password = document.getElementById('authPassword').value;
+
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) {
+      alert("Erro no Login: " + error.message);
+    } else {
+      cryptoKey = null;
+      authModal.classList.remove('active');
+      checkAuthStatus();
+    }
   }
 };
 
-signUpBtn.onclick = async () => {
-  // Se o formulário estiver ocultando os campos adicionais (modo login), abre a visualização de cadastro
-  if (authModal.classList.contains('is-login-mode')) {
-    setAuthMode(true);
-    return;
-  }
-
-  const name = document.getElementById('authName').value.trim();
-  const gender = document.getElementById('authGender').value;
-  const email = document.getElementById('authEmail').value.trim();
-  const password = document.getElementById('authPassword').value;
-  const passwordConfirm = document.getElementById('authPasswordConfirm').value;
-
-  if (!name || !gender || !email || !password || !passwordConfirm) {
-    alert("Por favor, preencha todos os campos do cadastro (Nome, Gênero, E-mail e Senhas).");
-    return;
-  }
-
-  if (password !== passwordConfirm) {
-    alert("As senhas informadas não coincidem. Digite novamente.");
-    return;
-  }
-
-  // Cadastro com meta-dados (Nome e Gênero)
-  const { data, error } = await supabaseClient.auth.signUp({ 
-    email, 
-    password,
-    options: {
-      data: {
-        full_name: name,
-        gender: gender
-      }
-    }
-  });
-
-  if (error) {
-    alert("Erro ao cadastrar: " + error.message);
-  } else {
-    alert("Cadastro concluído com sucesso! Se a verificação por e-mail estiver ativa, confira sua caixa de entrada.");
-    cryptoKey = null;
-    authModal.classList.remove('active');
-    checkAuthStatus();
-  }
+signUpBtn.onclick = () => {
+  setAuthMode(true);
 };
 
 async function checkAuthStatus() {
@@ -1335,7 +1416,12 @@ async function checkAuthStatus() {
   if (session) {
     currentUser = session.user;
     document.body.classList.add('authenticated');
-    authBtn.textContent = '🚪 Sair';
+    
+    // Pega o primeiro nome do usuário logado
+    const fullName = currentUser.user_metadata?.full_name || currentUser.email || 'Usuário';
+    const firstName = fullName.split(' ')[0];
+    authBtn.textContent = `👤 ${firstName} ▾`;
+    
     authBtn.classList.remove('highlight');
     authModal.classList.remove('active');
   } else {
