@@ -6,7 +6,17 @@ from google import genai
 from google.genai import types
 
 app = Flask(__name__)
-CORS(app)  # Permite que o index.html converse com o Python
+
+# --- CONFIGURAÇÃO DE SEGURANÇA DO CORS ---
+# Permite requisições APENAS do seu GitHub Pages e de ambientes locais de teste
+ALLOWED_ORIGINS = [
+    "https://edipogomesrecife.github.io",  # Domínio do seu GitHub Pages
+    "http://localhost:3000",                # Permite testes locais
+    "http://127.0.0.1:5500"                 # Permite Live Server do VS Code
+]
+
+# Restringe o acesso aos recursos do servidor apenas às origens acima
+CORS(app, resources={r"/*": {"origins": ALLOWED_ORIGINS}})
 
 # Lê a API Key que você cadastrou nas Environment Variables do Render
 api_key = os.getenv("GEMINI_API_KEY")
