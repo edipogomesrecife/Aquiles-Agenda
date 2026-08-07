@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
-<!-- Biblioteca Dexie.js para gerenciamento do IndexedDB -->
-<script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+<!-- SDK Oficial do Supabase v2 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
 :root {
@@ -28,7 +28,7 @@
   --hour-height: 140px;
 }
 
-/* TEMA CLARO INSPIRADO NO GEMINI (SUAVE E CONFORTÁVEL) */
+/* TEMA CLARO INSPIRADO NO GEMINI */
 .light-theme {
   --bg: #f8f9fa;
   --surface: #ffffff;
@@ -120,6 +120,17 @@ header#appHeader {
 }
 
 .btn-header:hover { border-color: var(--text-muted); }
+
+.btn-auth {
+  background: var(--accent-gold);
+  color: #111;
+  font-weight: 700;
+  border: none;
+}
+
+.btn-auth:hover {
+  background: var(--accent-gold-hover);
+}
 
 .btn-notify.active {
   border-color: rgba(34, 197, 94, 0.4);
@@ -785,7 +796,7 @@ header#appHeader {
 
 .btn-close-view:hover { color: var(--text-main); }
 
-/* --- AQUILES: ESTILOS DO WIDGET DE CHAT IA --- */
+/* CHAT WIDGET AQUILES */
 #aquilesWidget {
   position: fixed;
   bottom: 20px;
@@ -925,6 +936,7 @@ header#appHeader {
     <div class="logo-subtitle">AGENDA 🔐</div>
   </div>
   <div class="header-actions">
+    <button class="btn-header btn-auth" id="authBtn">🔑 Entrar</button>
     <button class="btn-header btn-notify" id="notifyToggle">🔔 Notificações</button>
     <button class="btn-header" id="themeToggle">☀️ Tema</button>
   </div>
@@ -980,6 +992,31 @@ header#appHeader {
 </div>
 
 <datalist id="hoursList"></datalist>
+
+<!-- Modal Auth (Supabase) -->
+<div class="modal-overlay" id="authModal">
+  <div class="modal">
+    <div class="modal-header" id="authModalTitle">Acessar Conta Supabase</div>
+    <form id="authForm">
+      <div class="form-group">
+        <label class="form-label">E-MAIL</label>
+        <input type="email" id="authEmail" class="form-input" placeholder="seuemail@exemplo.com" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">SENHA</label>
+        <input type="password" id="authPassword" class="form-input" placeholder="••••••••" required>
+      </div>
+
+      <div class="modal-actions" style="justify-content: space-between;">
+        <button type="button" class="btn-cancel" id="closeAuthModalBtn">Cancelar</button>
+        <div>
+          <button type="button" class="btn-cancel" id="signUpBtn">Cadastrar</button>
+          <button type="submit" class="btn-save">Entrar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
 
 <!-- Modal Criar / Editar -->
 <div class="modal-overlay" id="taskModal">
@@ -1047,7 +1084,7 @@ header#appHeader {
   </div>
 </div>
 
-<!-- WIDGET DO AGENTE AQUILES (IA) -->
+<!-- WIDGET AGENTE AQUILES -->
 <div id="aquilesWidget">
   <div class="aquiles-chat-box" id="aquilesChatBox">
     <div class="chat-header">
@@ -1069,6 +1106,15 @@ header#appHeader {
 </div>
 
 <script>
+/* ----------------------------------------------------
+   CONFIGURAÇÃO E CONEXÃO COM O SUPABASE
+---------------------------------------------------- */
+const SUPABASE_URL = "https://karxnrpowkoloyfuqzvs.supabase.co"; 
+const SUPABASE_ANON_KEY = "sb_publishable_AhLangNb4iit1T_o9_SwYg_CIYsZXHi"; 
+
+// Instância renomeada para 'supabaseClient' para evitar choque com a biblioteca global
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 /* ----------------------------------------------------
    MÓDULO NATIVO DE CRIPTOGRAFIA (Web Crypto API - AES-GCM 256)
 ---------------------------------------------------- */
@@ -1142,13 +1188,74 @@ async function decryptData(cipherText) {
 }
 
 /* ----------------------------------------------------
-   CONFIGURAÇÃO DO BANCO DE DADOS LOCAL (IndexedDB via Dexie)
+   SISTEMA DE AUTENTICAÇÃO COM SUPABASE
 ---------------------------------------------------- */
-const db = new Dexie("AuraOSDatabase");
-db.version(1).stores({
-  tasks: 'id, dateKey, start, done'
-});
+const authModal = document.getElementById('authModal');
+const authBtn = document.getElementById('authBtn');
+const authForm = document.getElementById('authForm');
+const signUpBtn = document.getElementById('signUpBtn');
+const closeAuthModalBtn = document.getElementById('closeAuthModalBtn');
+let currentUser = null;
 
+authBtn.onclick = async () => {
+  if (currentUser) {
+    await supabaseClient.auth.signOut();
+    checkAuthStatus();
+  } else {
+    authModal.classList.add('active');
+  }
+};
+
+closeAuthModalBtn.onclick = () => authModal.classList.remove('active');
+
+authForm.onsubmit = async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('authEmail').value;
+  const password = document.getElementById('authPassword').value;
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    alert("Erro no Login: " + error.message);
+  } else {
+    authModal.classList.remove('active');
+    checkAuthStatus();
+  }
+};
+
+signUpBtn.onclick = async () => {
+  const email = document.getElementById('authEmail').value;
+  const password = document.getElementById('authPassword').value;
+
+  if (!email || !password) {
+    alert("Preencha o e-mail e a senha para se cadastrar.");
+    return;
+  }
+
+  const { data, error } = await supabaseClient.auth.signUp({ email, password });
+  if (error) {
+    alert("Erro ao cadastrar: " + error.message);
+  } else {
+    alert("Cadastro concluído! Se a verificação por e-mail estiver ativa, confira sua caixa de entrada.");
+    authModal.classList.remove('active');
+    checkAuthStatus();
+  }
+};
+
+async function checkAuthStatus() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+    authBtn.textContent = '🚪 Sair';
+  } else {
+    currentUser = null;
+    authBtn.textContent = '🔑 Entrar';
+  }
+  await loadState();
+}
+
+/* ----------------------------------------------------
+   LÓGICA PRINCIPAL DA AGENDA
+---------------------------------------------------- */
 const HOUR_HEIGHT = 140;
 
 const timelineLabels = document.getElementById('timelineLabels');
@@ -1195,7 +1302,7 @@ function recordAction(action) {
 }
 
 async function undoLastAction() {
-  if (actionHistory.length === 0) return;
+  if (actionHistory.length === 0 || !currentUser) return;
   const lastAction = actionHistory.pop();
 
   if (lastAction.type === 'DELETE') {
@@ -1217,7 +1324,7 @@ async function undoLastAction() {
     }
   } else if (lastAction.type === 'CREATE') {
     delete tasksData[lastAction.taskId];
-    await db.tasks.delete(lastAction.taskId);
+    await supabaseClient.from('tasks').delete().eq('id', lastAction.taskId);
     const taskEl = document.getElementById(lastAction.taskId);
     if (taskEl) taskEl.remove();
   }
@@ -1230,19 +1337,25 @@ function normalizeTimeString(timeStr) {
   if (!timeStr) return '';
   let str = timeStr.trim();
   if (str.length === 2 && !str.includes(':')) {
-    str += ':00';
+    const num = parseInt(str, 10);
+    str = (num >= 0 && num < 24) ? `${str.padStart(2, '0')}:00` : str;
   } else if (str.length === 1 && !str.includes(':')) {
     str = '0' + str + ':00';
   } else if (str.includes(':')) {
     const parts = str.split(':');
-    const h = String(parseInt(parts[0], 10) || 0).padStart(2, '0');
-    const m = String(parseInt(parts[1], 10) || 0).padStart(2, '0');
+    const h = String(Math.min(23, Math.max(0, parseInt(parts[0], 10) || 0))).padStart(2, '0');
+    const m = String(Math.min(59, Math.max(0, parseInt(parts[1], 10) || 0))).padStart(2, '0');
     str = `${h}:${m}`;
   }
   return str;
 }
 
 function formatTimeInput(input) {
+  input.addEventListener('blur', (e) => {
+    if (e.target.value) {
+      e.target.value = normalizeTimeString(e.target.value);
+    }
+  });
   input.addEventListener('input', (e) => {
     let value = e.target.value.replace(/\D/g, '');
     if (value.length > 4) value = value.slice(0, 4);
@@ -1402,6 +1515,10 @@ function renderLayout() {
       taskElement.style.left = '0';
       taskElement.style.width = '100%';
       return;
+    } else {
+      if (taskElement.parentElement !== timelineGrid) {
+        timelineGrid.appendChild(taskElement);
+      }
     }
 
     const startMin = timeToMinutes(start);
@@ -1464,104 +1581,13 @@ function renderLayout() {
   });
 }
 
-/* NOTIFICAÇÕES */
-function updateNotifyButton() {
-  const notifyBtn = document.getElementById('notifyToggle');
-  if (!notifyBtn) return;
-
-  if (window.location.protocol === 'file:' || !("Notification" in window)) {
-    notifyBtn.innerHTML = '🔕 Indisponível no App';
-    notifyBtn.style.opacity = '0.6';
-    return;
-  }
-  
-  if (Notification.permission === "granted") {
-    notifyBtn.classList.add('active');
-    notifyBtn.innerHTML = '🔔 Ativas';
-  } else {
-    notifyBtn.classList.remove('active');
-    notifyBtn.innerHTML = '🔕 Ativar';
-  }
-}
-
-notifyToggle.onclick = () => {
-  if (window.location.protocol === 'file:') {
-    alert("Para notificações em tempo real, acesse o link HTTPS no navegador ou instale via PWA.");
-    return;
-  }
-
-  if (!("Notification" in window)) {
-    alert("Este navegador ou aplicativo não dá suporte a notificações.");
-    return;
-  }
-
-  if (Notification.permission === "granted") {
-    updateNotifyButton();
-    new Notification("AURA OS | Agenda", { body: "Notificações ativas!" });
-    return;
-  }
-
-  if (Notification.permission === "denied") {
-    alert("Por favor, libere as notificações nas configurações do seu celular.");
-    return;
-  }
-
-  Notification.requestPermission().then(permission => {
-    updateNotifyButton();
-    if (permission === "granted") {
-      new Notification("AURA OS | Agenda", { body: "Notificações ativadas!" });
-    }
-  });
-};
-
-function checkTaskNotifications() {
-  if (window.location.protocol === 'file:' || !("Notification" in window) || Notification.permission !== "granted") return;
-
-  const now = new Date();
-  const todayKey = getDateKey();
-  
-  const currentYMD = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
-  const nowYMD = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-
-  if (currentYMD !== nowYMD) return;
-
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-  Object.values(tasksData).forEach(data => {
-    if (data.done) return;
-
-    const title = data.title;
-    const start = normalizeTimeString(data.start);
-    if (!start) return;
-
-    const startMin = timeToMinutes(start);
-    const diff = startMin - currentMinutes;
-
-    const notif10Key = `${todayKey}_${data.id}_10min`;
-    const notif0Key = `${todayKey}_${data.id}_now`;
-
-    if (diff <= 10 && diff > 0 && !notifiedTasks.has(notif10Key)) {
-      notifiedTasks.add(notif10Key);
-      new Notification("AURA OS | Em 10 Minutos", {
-        body: `Sua tarefa "${title}" começa às ${start}.`,
-        tag: notif10Key
-      });
-    }
-
-    if (diff === 0 && !notifiedTasks.has(notif0Key)) {
-      notifiedTasks.add(notif0Key);
-      new Notification("AURA OS | Começando Agora", {
-        body: `Está na hora de: "${title}" (${start})`,
-        tag: notif0Key
-      });
-    }
-  });
-}
-
-setInterval(checkTaskNotifications, 30000);
-
 function openModal(defaultStart = '', taskIdToEdit = null) {
   if (isReadOnly) return;
+  if (!currentUser) {
+    alert("Faça o login com a conta do Supabase no topo da tela para criar tarefas.");
+    authModal.classList.add('active');
+    return;
+  }
 
   closeViewModal();
   editingTaskId = taskIdToEdit;
@@ -1686,7 +1712,7 @@ viewDeleteBtn.onclick = async () => {
     if (taskEl) taskEl.remove();
     
     delete tasksData[idToDelete];
-    await db.tasks.delete(idToDelete);
+    await supabaseClient.from('tasks').delete().eq('id', idToDelete);
     recordAction({ type: 'DELETE', task: oldTask });
 
     closeViewModal();
@@ -1808,25 +1834,31 @@ function updateTaskDOM(id) {
   if (cb) cb.checked = !!data.done;
 }
 
-/* SALVA E ATUALIZA DADOS CRIPTOGRAFADOS NO INDEXEDDB */
+/* SALVA OS DADOS CRIPTOGRAFADOS DIRETO NO SUPABASE */
 async function saveTaskToDB(taskObj, targetDateKey = null) {
+  if (!currentUser) return;
+
   const dateKey = targetDateKey || taskObj.dateKey || getDateKey();
-  
   if (!targetDateKey && isReadOnly) return;
-  
+
   tasksData[taskObj.id] = { ...taskObj, dateKey };
 
   const encryptedTitle = await encryptData(taskObj.title);
   const encryptedNotes = await encryptData(taskObj.notes);
 
-  const recordToStore = {
-    ...taskObj,
+  const payload = {
+    id: taskObj.id,
+    user_id: currentUser.id,
+    date_key: dateKey,
+    start: taskObj.start || '',
+    end: taskObj.end || '',
     title: encryptedTitle,
     notes: encryptedNotes,
-    dateKey: dateKey
+    done: !!taskObj.done
   };
 
-  await db.tasks.put(recordToStore);
+  const { error } = await supabaseClient.from('tasks').upsert(payload);
+  if (error) console.error("Erro ao salvar no Supabase:", error);
   updateStats();
 }
 
@@ -1844,25 +1876,42 @@ async function loadState() {
     themeToggle.textContent = '☀️ Tema';
   }
 
+  if (!currentUser) return;
+
   const dateKey = getDateKey();
-  const tasksFromDB = await db.tasks.where('dateKey').equals(dateKey).toArray();
+  const { data: tasksFromDB, error } = await supabaseClient
+    .from('tasks')
+    .select('*')
+    .eq('date_key', dateKey);
+
+  if (error) {
+    console.error("Erro ao buscar tarefas:", error);
+    return;
+  }
 
   for (const rawData of tasksFromDB) {
     const decryptedTitle = await decryptData(rawData.title);
     const decryptedNotes = await decryptData(rawData.notes);
 
     const decryptedTask = {
-      ...rawData,
+      id: rawData.id,
+      dateKey: rawData.date_key,
+      start: rawData.start,
+      end: rawData.end,
       title: decryptedTitle,
-      notes: decryptedNotes
+      notes: decryptedNotes,
+      done: rawData.done
     };
 
     tasksData[rawData.id] = decryptedTask;
 
     const el = createTaskDOM(rawData.id);
     if (el) {
-      if (rawData.start) timelineGrid.appendChild(el);
-      else backlog.appendChild(el);
+      if (rawData.start && rawData.start.trim() !== '') {
+        timelineGrid.appendChild(el);
+      } else {
+        backlog.appendChild(el);
+      }
     }
   }
 
@@ -1992,7 +2041,7 @@ function bindTaskEvents(task) {
       e.stopPropagation();
       const oldTask = { ...tasksData[task.id] };
       delete tasksData[task.id];
-      await db.tasks.delete(task.id);
+      await supabaseClient.from('tasks').delete().eq('id', task.id);
       task.remove();
       recordAction({ type: 'DELETE', task: oldTask });
       renderLayout();
@@ -2123,8 +2172,48 @@ function toggleTheme() {
 
 themeToggle.onclick = toggleTheme;
 
+/* NOTIFICAÇÕES */
+function updateNotifyButton() {
+  const notifyBtn = document.getElementById('notifyToggle');
+  if (!notifyBtn) return;
+
+  if (window.location.protocol === 'file:' || !("Notification" in window)) {
+    notifyBtn.innerHTML = '🔕 Indisponível';
+    notifyBtn.style.opacity = '0.6';
+    return;
+  }
+  
+  if (Notification.permission === "granted") {
+    notifyBtn.classList.add('active');
+    notifyBtn.innerHTML = '🔔 Ativas';
+  } else {
+    notifyBtn.classList.remove('active');
+    notifyBtn.innerHTML = '🔕 Ativar';
+  }
+}
+
+notifyToggle.onclick = () => {
+  if (!("Notification" in window)) {
+    alert("Este navegador não suporta notificações.");
+    return;
+  }
+
+  if (Notification.permission === "granted") {
+    updateNotifyButton();
+    new Notification("AURA OS | Agenda", { body: "Notificações ativas!" });
+    return;
+  }
+
+  Notification.requestPermission().then(permission => {
+    updateNotifyButton();
+    if (permission === "granted") {
+      new Notification("AURA OS | Agenda", { body: "Notificações ativadas!" });
+    }
+  });
+};
+
 /* ----------------------------------------------------
-   SISTEMA INTEGRADO DO AGENTE AQUILES VIA BACKEND PYTHON
+   SISTEMA WIDGET AQUILES (IA)
 ---------------------------------------------------- */
 let aquilesHistory = [];
 
@@ -2152,13 +2241,17 @@ function appendMessage(sender, text) {
 }
 
 async function getAllDecryptedTasksForAquiles() {
-  const allRaw = await db.tasks.toArray();
+  if (!currentUser) return [];
+
+  const { data: allRaw } = await supabaseClient.from('tasks').select('*');
   const decryptedList = [];
+
+  if (!allRaw) return [];
 
   for (const item of allRaw) {
     const title = await decryptData(item.title);
     const notes = await decryptData(item.notes);
-    const dateStr = item.dateKey.replace('aura_agenda_', '');
+    const dateStr = item.date_key.replace('aura_agenda_', '');
     decryptedList.push({
       id: item.id,
       data: dateStr,
@@ -2176,10 +2269,7 @@ async function handleAquilesQuery(userText) {
   appendMessage('user', userText);
   chatInput.value = '';
 
-  aquilesHistory.push({
-    role: 'user',
-    text: userText
-  });
+  aquilesHistory.push({ role: 'user', text: userText });
 
   const loadingDiv = document.createElement('div');
   loadingDiv.className = 'chat-msg aquiles';
@@ -2204,19 +2294,13 @@ async function handleAquilesQuery(userText) {
       })
     });
 
-    if (!response.ok) {
-      throw new Error(`Erro no servidor: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`Erro no servidor: ${response.status}`);
 
     const data = await response.json();
     loadingDiv.remove();
 
     const respostaIA = typeof data === 'string' ? data : (data.reply || JSON.stringify(data));
-    
-    aquilesHistory.push({
-      role: 'model',
-      text: respostaIA
-    });
+    aquilesHistory.push({ role: 'model', text: respostaIA });
 
     if (data.action === "CREATE_TASK") {
       const newId = 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -2246,10 +2330,8 @@ async function handleAquilesQuery(userText) {
   } catch (err) {
     console.error(err);
     loadingDiv.remove();
-
     aquilesHistory.pop();
-
-    appendMessage('aquiles', 'Não foi possível se conectar ao servidor Python. Certifique-se de que ele está ativo!');
+    appendMessage('aquiles', 'Não foi possível se conectar ao servidor do Aquiles.');
   }
 }
 
@@ -2276,19 +2358,14 @@ document.addEventListener('keydown', (e) => {
     activeElement.isContentEditable
   );
 
-  // Esc para fechar qualquer modal ou chat ativo
   if (e.key === 'Escape') {
-    if (taskModal.classList.contains('active')) {
-      closeModal();
-    } else if (viewTaskModal.classList.contains('active')) {
-      closeViewModal();
-    } else if (aquilesChatBox.classList.contains('active')) {
-      aquilesChatBox.classList.remove('active');
-    }
+    if (taskModal.classList.contains('active')) closeModal();
+    else if (viewTaskModal.classList.contains('active')) closeViewModal();
+    else if (authModal.classList.contains('active')) authModal.classList.remove('active');
+    else if (aquilesChatBox.classList.contains('active')) aquilesChatBox.classList.remove('active');
     return;
   }
 
-  // Comportamento do Enter dentro do modal de tarefas
   if (e.key === 'Enter' && taskModal.classList.contains('active')) {
     if (activeElement.id === 'taskNotesInput') {
       if (e.ctrlKey) {
@@ -2302,7 +2379,6 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Ctrl + Z para desfazer
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
     if (!isInputActive) {
       e.preventDefault();
@@ -2311,10 +2387,8 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Se o usuário estiver num campo de texto, ignora atalhos de tecla única/setas
   if (isInputActive) return;
 
-  // Atalhos Globais de Tecla Única e Navegação
   switch (e.key) {
     case 'n':
     case 'N':
@@ -2326,14 +2400,11 @@ document.addEventListener('keydown', (e) => {
     case 'A':
       e.preventDefault();
       aquilesChatBox.classList.toggle('active');
-      if (aquilesChatBox.classList.contains('active')) {
-        chatInput.focus();
-      }
+      if (aquilesChatBox.classList.contains('active')) chatInput.focus();
       break;
 
     case 'c':
     case 'C':
-      // Apenas abre o calendário se NÃO for uma combinação com Ctrl ou Cmd (ex: Ctrl+C)
       if (!e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         btnCalendar.click();
@@ -2362,7 +2433,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await getOrCreateCryptoKey();
   updateNotifyButton();
   updateDateDisplay();
-  await loadState();
+  await checkAuthStatus();
 });
 
 window.addEventListener('focus', updateNotifyButton);
