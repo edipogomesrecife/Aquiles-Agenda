@@ -1088,11 +1088,11 @@ header#appHeader {
 <div class="modal-overlay" id="authModal">
   <div class="modal">
     <div class="modal-header" id="authModalTitle">Acessar Aquiles OS</div>
-    <form id="authForm">
+    <form id="authForm" autocomplete="off">
       
       <div class="form-group auth-signup-only">
         <label class="form-label">NOME COMPLETO</label>
-        <input type="text" id="authName" class="form-input" placeholder="Seu nome completo">
+        <input type="text" id="authName" class="form-input" placeholder="Seu nome completo" autocomplete="off">
       </div>
 
       <div class="form-group auth-signup-only">
@@ -1106,17 +1106,17 @@ header#appHeader {
 
       <div class="form-group">
         <label class="form-label">E-MAIL</label>
-        <input type="email" id="authEmail" class="form-input" placeholder="seuemail@exemplo.com" required>
+        <input type="email" id="authEmail" class="form-input" placeholder="seuemail@exemplo.com" required autocomplete="off">
       </div>
 
       <div class="form-group">
         <label class="form-label" id="labelAuthPassword">SENHA</label>
-        <input type="password" id="authPassword" class="form-input" placeholder="••••••••" required>
+        <input type="password" id="authPassword" class="form-input" placeholder="••••••••" required autocomplete="new-password">
       </div>
 
       <div class="form-group auth-signup-only">
         <label class="form-label">REPETIR SENHA</label>
-        <input type="password" id="authPasswordConfirm" class="form-input" placeholder="••••••••">
+        <input type="password" id="authPasswordConfirm" class="form-input" placeholder="••••••••" autocomplete="new-password">
       </div>
 
       <div class="modal-actions" style="justify-content: flex-end; gap: 8px;">
@@ -1352,6 +1352,15 @@ const labelAuthPassword = document.getElementById('labelAuthPassword');
 
 let currentUser = null;
 
+// Função utilitária para limpar todos os campos do formulário de auth
+function clearAuthForm() {
+  document.getElementById('authName').value = '';
+  document.getElementById('authGender').selectedIndex = 0;
+  document.getElementById('authEmail').value = '';
+  document.getElementById('authPassword').value = '';
+  document.getElementById('authPasswordConfirm').value = '';
+}
+
 // Alterna a interface do Modal para modo Login ou Cadastro
 function setAuthMode(isSignUp) {
   if (isSignUp) {
@@ -1369,9 +1378,7 @@ function setAuthMode(isSignUp) {
 
 // Botão "Cancelar" na tela de cadastro (volta ao modo login)
 cancelSignUpBtn.onclick = () => {
-  document.getElementById('authName').value = '';
-  document.getElementById('authGender').selectedIndex = 0;
-  document.getElementById('authPasswordConfirm').value = '';
+  clearAuthForm();
   setAuthMode(false);
 };
 
@@ -1379,6 +1386,7 @@ authBtn.onclick = async () => {
   if (currentUser) {
     userDropdown.classList.toggle('active');
   } else {
+    clearAuthForm();
     setAuthMode(false);
     authModal.classList.add('active');
   }
@@ -1440,8 +1448,15 @@ profileForm.onsubmit = async (e) => {
 
 logoutBtn.onclick = async () => {
   userDropdown.classList.remove('active');
+  
+  // 1. Efetua o logout no Supabase
   await supabaseClient.auth.signOut();
   cryptoKey = null;
+
+  // 2. Limpa os campos do formulário para evitar que e-mail/senha fiquem expostos
+  clearAuthForm();
+
+  // 3. Atualiza os estados de autenticação na UI
   checkAuthStatus();
 };
 
@@ -1483,6 +1498,7 @@ authForm.onsubmit = async (e) => {
     } else {
       alert("Cadastro concluído com sucesso! Se a verificação por e-mail estiver ativa, confira sua caixa de entrada.");
       cryptoKey = null;
+      clearAuthForm();
       authModal.classList.remove('active');
       checkAuthStatus();
     }
@@ -1495,6 +1511,7 @@ authForm.onsubmit = async (e) => {
       alert("Erro no Login: " + error.message);
     } else {
       cryptoKey = null;
+      clearAuthForm();
       authModal.classList.remove('active');
       checkAuthStatus();
     }
@@ -1523,6 +1540,8 @@ async function checkAuthStatus() {
     document.body.classList.remove('authenticated');
     authBtn.textContent = '🔑 Entrar';
     authBtn.classList.add('highlight');
+    
+    clearAuthForm(); // Garante formulário limpo ao ficar deslogado
     setAuthMode(false); // Modo login por padrão ao abrir
     authModal.classList.add('active');
     setTimeout(() => document.getElementById('authEmail').focus(), 100);
